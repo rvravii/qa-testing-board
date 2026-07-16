@@ -9,7 +9,7 @@ Upload settlement Excel exports (one month or multiple months) and see **mismatc
 
 After GitHub Pages is enabled:
 
-`https://<your-username>.github.io/settlement-balance-check/`
+https://rvravii.github.io/settlement-balance-check/
 
 ## How to use
 

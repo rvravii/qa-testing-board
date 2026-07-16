@@ -1,0 +1,834 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Settlement Balance Check</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <style>
+    :root {
+      --bg: #0f1419;
+      --surface: #182028;
+      --surface-2: #1e2a33;
+      --border: #2a3944;
+      --text: #e8eef2;
+      --muted: #8a9bab;
+      --accent: #2dd4a8;
+      --accent-dim: rgba(45, 212, 168, 0.14);
+      --danger: #f07178;
+      --danger-dim: rgba(240, 113, 120, 0.14);
+      --radius: 10px;
+      --font: "DM Sans", system-ui, sans-serif;
+      --mono: "IBM Plex Mono", ui-monospace, monospace;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: var(--font);
+      background:
+        radial-gradient(1000px 500px at 8% -8%, #1a2f2a 0%, transparent 55%),
+        radial-gradient(800px 420px at 100% 0%, #1a2430 0%, transparent 50%),
+        var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      line-height: 1.45;
+    }
+
+    .wrap { max-width: 1120px; margin: 0 auto; padding: 28px 24px 64px; }
+
+    header.hero {
+      display: grid;
+      gap: 8px;
+      margin-bottom: 22px;
+      padding-bottom: 20px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .brand {
+      font-size: 12px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--accent);
+      font-weight: 600;
+    }
+
+    h1 {
+      font-size: clamp(1.5rem, 2.8vw, 2rem);
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+
+    .subtitle { color: var(--muted); font-size: 0.95rem; max-width: 58ch; }
+
+    .upload-zone {
+      margin: 18px 0 22px;
+      border: 1.5px dashed var(--border);
+      border-radius: var(--radius);
+      background: var(--surface);
+      padding: 22px 20px;
+      text-align: center;
+      transition: border-color 0.15s, background 0.15s;
+      cursor: pointer;
+    }
+
+    .upload-zone:hover,
+    .upload-zone.dragover {
+      border-color: var(--accent);
+      background: var(--accent-dim);
+    }
+
+    .upload-zone h2 {
+      font-size: 1rem;
+      font-weight: 600;
+      margin-bottom: 6px;
+    }
+
+    .upload-zone p { color: var(--muted); font-size: 13px; }
+
+    .upload-zone .hint {
+      margin-top: 10px;
+      font-size: 12px;
+      color: var(--muted);
+      font-family: var(--mono);
+    }
+
+    .upload-actions {
+      margin-top: 14px;
+      display: flex;
+      gap: 10px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    .btn {
+      font-family: var(--font);
+      font-size: 13px;
+      font-weight: 600;
+      border-radius: 8px;
+      padding: 9px 16px;
+      border: 1px solid var(--border);
+      background: var(--surface-2);
+      color: var(--text);
+      cursor: pointer;
+      transition: border-color 0.15s, background 0.15s;
+    }
+
+    .btn:hover { border-color: #3d5160; }
+    .btn.primary {
+      background: var(--accent-dim);
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+    #fileInput { display: none; }
+
+    .file-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      justify-content: center;
+      margin-top: 12px;
+    }
+
+    .file-tag {
+      font-size: 12px;
+      color: var(--muted);
+      border: 1px solid var(--border);
+      background: var(--bg);
+      padding: 4px 10px;
+      border-radius: 999px;
+    }
+
+    .error-box {
+      display: none;
+      margin-bottom: 16px;
+      padding: 12px 14px;
+      border-radius: 8px;
+      background: var(--danger-dim);
+      border: 1px solid rgba(240, 113, 120, 0.35);
+      color: var(--danger);
+      font-size: 13px;
+    }
+
+    .error-box.show { display: block; }
+
+    .results { display: none; }
+    .results.show { display: block; }
+
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 14px;
+    }
+
+    .filters { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+
+    select.month-filter {
+      font-family: var(--font);
+      font-size: 13px;
+      color: var(--text);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 12px;
+      min-width: 160px;
+    }
+
+    .kpis {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+
+    .kpi {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .kpi::before {
+      content: "";
+      position: absolute;
+      inset: 0 auto 0 0;
+      width: 3px;
+      background: var(--border);
+    }
+
+    .kpi.ok::before { background: var(--accent); }
+    .kpi.bad::before { background: var(--danger); }
+    .kpi.neutral::before { background: #5b8def; }
+
+    .kpi .label {
+      font-size: 11px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 6px;
+    }
+
+    .kpi .value {
+      font-family: var(--mono);
+      font-size: 1.65rem;
+      font-weight: 500;
+    }
+
+    .kpi.ok .value { color: var(--accent); }
+    .kpi.bad .value { color: var(--danger); }
+
+    .panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      margin-bottom: 14px;
+    }
+
+    .panel-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 12px;
+      padding: 14px 16px 10px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .panel-head h2 { font-size: 0.95rem; font-weight: 600; }
+    .panel-head span { font-size: 12px; color: var(--muted); }
+    .panel-body { padding: 12px 16px 16px; }
+
+    .chart-wrap { height: 260px; position: relative; }
+    canvas { width: 100%; height: 100%; display: block; }
+
+    .empty-state {
+      text-align: center;
+      padding: 36px 16px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .empty-state strong { color: var(--accent); }
+
+    .table-scroll { overflow: auto; max-height: 480px; }
+
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+
+    th {
+      position: sticky;
+      top: 0;
+      background: var(--surface-2);
+      text-align: left;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--muted);
+      font-weight: 600;
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+    }
+
+    th.num, td.num {
+      text-align: right;
+      font-family: var(--mono);
+      font-variant-numeric: tabular-nums;
+    }
+
+    td {
+      padding: 9px 12px;
+      border-bottom: 1px solid rgba(42, 57, 68, 0.7);
+      white-space: nowrap;
+    }
+
+    tr.mismatch td { background: var(--danger-dim); }
+
+    .badge {
+      display: inline-block;
+      font-size: 11px;
+      font-weight: 600;
+      padding: 3px 8px;
+      border-radius: 999px;
+      color: var(--danger);
+      background: var(--danger-dim);
+    }
+
+    footer.note {
+      margin-top: 18px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    @media (max-width: 800px) {
+      .kpis { grid-template-columns: repeat(2, 1fr); }
+    }
+
+    @media (max-width: 480px) {
+      .kpis { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header class="hero">
+      <div class="brand">Settlement Ops · Reconciliation</div>
+      <h1>Settlement Balance Check</h1>
+      <p class="subtitle">
+        Upload one or more monthly Excel exports. The dashboard checks Starting Balance through Deposit against Ending Balance and shows only mismatch days.
+      </p>
+    </header>
+
+    <div
+      class="upload-zone"
+      id="uploadZone"
+      tabindex="0"
+      role="button"
+      aria-label="Upload Excel files"
+    >
+      <h2>Upload settlement Excel</h2>
+      <p>Drop files here, or choose files. Supports single month or multiple months (bulk).</p>
+      <p class="hint">Accepted: .xlsx · Same layout as export (dates as columns)</p>
+      <div class="upload-actions">
+        <button class="btn primary" type="button" id="browseBtn">Choose Excel file(s)</button>
+        <button class="btn" type="button" id="clearBtn" disabled>Clear data</button>
+      </div>
+      <div class="file-tags" id="fileTags"></div>
+      <input id="fileInput" type="file" accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" multiple />
+    </div>
+
+    <div class="error-box" id="errorBox"></div>
+
+    <div class="results" id="results">
+      <div class="toolbar">
+        <div class="filters">
+          <label for="monthFilter" style="font-size:12px;color:var(--muted)">Month</label>
+          <select class="month-filter" id="monthFilter">
+            <option value="all">All months</option>
+          </select>
+        </div>
+        <div style="font-size:12px;color:var(--muted);font-family:var(--mono)">
+          Σ(Start…Deposit) − Ending = Difference · ±$0.02
+        </div>
+      </div>
+
+      <section class="kpis">
+        <div class="kpi neutral">
+          <div class="label">Days checked</div>
+          <div class="value" id="kpiDays">0</div>
+        </div>
+        <div class="kpi ok">
+          <div class="label">Match</div>
+          <div class="value" id="kpiMatch">0</div>
+        </div>
+        <div class="kpi bad">
+          <div class="label">Mismatch</div>
+          <div class="value" id="kpiMis">0</div>
+        </div>
+        <div class="kpi ok">
+          <div class="label">Match rate</div>
+          <div class="value" id="kpiRate">—</div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <h2>Mismatch difference (bar chart)</h2>
+          <span>Only days where calculated ≠ ending balance</span>
+        </div>
+        <div class="panel-body">
+          <div class="chart-wrap" id="chartWrap">
+            <canvas id="diffChart"></canvas>
+            <div class="empty-state" id="chartEmpty" style="display:none">
+              No mismatches in this selection. <strong>All days match.</strong>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <h2>Mismatch difference table</h2>
+          <span id="tableCount">0 rows</span>
+        </div>
+        <div class="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Month</th>
+                <th class="num">Calculated Ending</th>
+                <th class="num">Ending Balance</th>
+                <th class="num">Difference</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody id="tbody"></tbody>
+          </table>
+          <div class="empty-state" id="tableEmpty" style="display:none">
+            No mismatch rows to show for the selected month.
+          </div>
+        </div>
+      </section>
+
+      <footer class="note">
+        Check = Starting Balance + Collected + Collections + Refunds + Chargeback + Returns + Deduction + Reimbursement + Less: Payments at Club + Deposit
+      </footer>
+    </div>
+  </div>
+
+  <script>
+    const TOLERANCE = 0.02;
+    const METRIC_ORDER = [
+      "Starting Balance",
+      "Collected",
+      "Collections",
+      "Refunds",
+      "Chargeback/Chargeback Repost",
+      "Returns",
+      "Deduction",
+      "Reimbursement",
+      "Less: Payments made at Club",
+      "Deposit",
+    ];
+
+    let allDays = [];
+    let loadedFiles = [];
+
+    const uploadZone = document.getElementById("uploadZone");
+    const fileInput = document.getElementById("fileInput");
+    const browseBtn = document.getElementById("browseBtn");
+    const clearBtn = document.getElementById("clearBtn");
+    const errorBox = document.getElementById("errorBox");
+    const results = document.getElementById("results");
+    const monthFilter = document.getElementById("monthFilter");
+
+    function money(n) {
+      const abs = Math.abs(n).toLocaleString("en-US", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      });
+      return n < 0 ? `($${abs})` : `$${abs}`;
+    }
+
+    function showError(msg) {
+      errorBox.textContent = msg;
+      errorBox.classList.add("show");
+    }
+
+    function clearError() {
+      errorBox.textContent = "";
+      errorBox.classList.remove("show");
+    }
+
+    function toNumber(v) {
+      if (v === null || v === undefined || v === "") return 0;
+      if (typeof v === "number" && !Number.isNaN(v)) return v;
+      const s = String(v).replace(/[$,\s]/g, "").replace(/^\((.*)\)$/, "-$1");
+      const n = Number(s);
+      return Number.isFinite(n) ? n : 0;
+    }
+
+    function excelDateToJS(v) {
+      if (v instanceof Date && !Number.isNaN(v.getTime())) {
+        // SheetJS Date objects are local calendar days — keep Y/M/D as-is
+        return new Date(v.getFullYear(), v.getMonth(), v.getDate());
+      }
+      if (typeof v === "number") {
+        // Excel serial → UTC midnight, then take UTC Y/M/D as calendar date
+        const utc = new Date(Math.round((v - 25569) * 86400 * 1000));
+        if (Number.isNaN(utc.getTime())) return null;
+        return new Date(utc.getUTCFullYear(), utc.getUTCMonth(), utc.getUTCDate());
+      }
+      if (typeof v === "string") {
+        const t = v.trim();
+        if (!t || /^total$/i.test(t)) return null;
+        const m = t.match(/^(\d{4})-(\d{2})-(\d{2})/);
+        if (m) return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+        const d = new Date(t);
+        if (Number.isNaN(d.getTime())) return null;
+        return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+      }
+      return null;
+    }
+
+    function monthKey(d) {
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    }
+
+    function monthLabel(key) {
+      const [y, m] = key.split("-");
+      const names = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+      return `${names[Number(m) - 1]} ${y}`;
+    }
+
+    function dayLabel(d) {
+      const names = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+      return `${names[d.getMonth()]} ${String(d.getDate()).padStart(2, "0")}`;
+    }
+
+    function normalizeMetricName(name) {
+      if (!name) return "";
+      const s = String(name).trim();
+      if (/^less:\s*payments/i.test(s)) return "Less: Payments made at Club";
+      if (/chargeback/i.test(s)) return "Chargeback/Chargeback Repost";
+      return s;
+    }
+
+    function parseSheetMatrix(rows, sourceFile) {
+      if (!rows || rows.length < 3) {
+        throw new Error(`"${sourceFile}" looks empty or incomplete.`);
+      }
+
+      // Find header row: first cell like FormattedFullDate / Date
+      let headerIdx = rows.findIndex((r) => {
+        const c0 = String(r[0] || "").trim().toLowerCase();
+        return c0.includes("formattedfulldate") || c0 === "date" || c0 === "fulldate";
+      });
+      if (headerIdx < 0) headerIdx = 0;
+
+      const header = rows[headerIdx];
+      const metricRows = {};
+
+      for (let r = headerIdx + 1; r < rows.length; r++) {
+        const rawName = rows[r][0];
+        if (rawName === null || rawName === undefined || rawName === "") continue;
+        const name = normalizeMetricName(rawName);
+        const lower = name.toLowerCase();
+        if (lower.startsWith("applied filters")) break;
+        if (lower === "settlement type" || lower === "formattedfulldate") continue;
+        metricRows[name] = rows[r];
+      }
+
+      const endingKey = Object.keys(metricRows).find((k) => /^ending balance$/i.test(k));
+      if (!endingKey) {
+        throw new Error(`"${sourceFile}": Ending Balance row not found.`);
+      }
+
+      const days = [];
+
+      for (let c = 1; c < header.length; c++) {
+        const rawHeader = header[c];
+        if (rawHeader === null || rawHeader === undefined || rawHeader === "") continue;
+        if (typeof rawHeader === "string" && /^total$/i.test(rawHeader.trim())) continue;
+
+        const dateObj = excelDateToJS(rawHeader);
+        if (!dateObj) continue;
+
+        let calc = 0;
+        for (const metric of METRIC_ORDER) {
+          const row = metricRows[metric];
+          calc += row ? toNumber(row[c]) : 0;
+        }
+
+        // Also include any unexpected numeric metric rows between start and deposit
+        // if names slightly differ — already handled by normalize + METRIC_ORDER.
+
+        const ending = toNumber(metricRows[endingKey][c]);
+        const diff = Math.round((calc - ending) * 10000) / 10000;
+        const status = Math.abs(diff) < TOLERANCE ? "Match" : "Mismatch";
+
+        const yyyy = dateObj.getFullYear();
+        const mm = String(dateObj.getMonth() + 1).padStart(2, "0");
+        const dd = String(dateObj.getDate()).padStart(2, "0");
+
+        days.push({
+          date: `${yyyy}-${mm}-${dd}`,
+          dateObj,
+          label: dayLabel(dateObj),
+          month: monthKey(dateObj),
+          monthLabel: monthLabel(monthKey(dateObj)),
+          calc: Math.round(calc * 100) / 100,
+          ending: Math.round(ending * 100) / 100,
+          diff: Math.round(diff * 100) / 100,
+          status,
+          sourceFile,
+        });
+      }
+
+      if (!days.length) {
+        throw new Error(`"${sourceFile}": no valid date columns found.`);
+      }
+
+      return days;
+    }
+
+    function parseWorkbook(buffer, sourceFile) {
+      const wb = XLSX.read(buffer, { type: "array", cellDates: true });
+      const sheetName = wb.SheetNames[0];
+      const sheet = wb.Sheets[sheetName];
+      const rows = XLSX.utils.sheet_to_json(sheet, {
+        header: 1,
+        defval: null,
+        raw: true,
+      });
+      return parseSheetMatrix(rows, sourceFile);
+    }
+
+    async function handleFiles(fileList) {
+      clearError();
+      const files = Array.from(fileList || []).filter((f) =>
+        /\.xlsx?$/i.test(f.name) || f.type.includes("sheet") || f.type.includes("excel")
+      );
+
+      if (!files.length) {
+        showError("Please upload .xlsx Excel files.");
+        return;
+      }
+
+      const newDays = [];
+      const newNames = [];
+
+      try {
+        for (const file of files) {
+          const buffer = await file.arrayBuffer();
+          const days = parseWorkbook(buffer, file.name);
+          newDays.push(...days);
+          newNames.push(file.name);
+        }
+      } catch (err) {
+        showError(err.message || "Failed to parse Excel file.");
+        return;
+      }
+
+      // Merge: replace same dates from newer uploads, keep others
+      const map = new Map(allDays.map((d) => [d.date, d]));
+      for (const d of newDays) map.set(d.date, d);
+      allDays = Array.from(map.values()).sort((a, b) => a.date.localeCompare(b.date));
+
+      for (const n of newNames) {
+        if (!loadedFiles.includes(n)) loadedFiles.push(n);
+      }
+
+      renderFileTags();
+      clearBtn.disabled = false;
+      buildMonthFilter();
+      renderAll();
+    }
+
+    function renderFileTags() {
+      document.getElementById("fileTags").innerHTML = loadedFiles
+        .map((n) => `<span class="file-tag">${n}</span>`)
+        .join("");
+    }
+
+    function buildMonthFilter() {
+      const months = [...new Set(allDays.map((d) => d.month))].sort();
+      const current = monthFilter.value || "all";
+      monthFilter.innerHTML =
+        `<option value="all">All months (${months.length})</option>` +
+        months.map((m) => `<option value="${m}">${monthLabel(m)}</option>`).join("");
+      monthFilter.value = months.includes(current) ? current : "all";
+    }
+
+    function scopedDays() {
+      const m = monthFilter.value;
+      return m === "all" ? allDays : allDays.filter((d) => d.month === m);
+    }
+
+    function renderAll() {
+      if (!allDays.length) {
+        results.classList.remove("show");
+        return;
+      }
+      results.classList.add("show");
+
+      const days = scopedDays();
+      const match = days.filter((d) => d.status === "Match").length;
+      const mis = days.filter((d) => d.status === "Mismatch");
+      const total = days.length;
+      const rate = total ? ((match / total) * 100).toFixed(1) + "%" : "—";
+
+      document.getElementById("kpiDays").textContent = String(total);
+      document.getElementById("kpiMatch").textContent = String(match);
+      document.getElementById("kpiMis").textContent = String(mis.length);
+      document.getElementById("kpiRate").textContent = rate;
+
+      renderTable(mis);
+      drawChart(mis);
+    }
+
+    function renderTable(mismatches) {
+      const tbody = document.getElementById("tbody");
+      const empty = document.getElementById("tableEmpty");
+      document.getElementById("tableCount").textContent = `${mismatches.length} mismatch day(s)`;
+
+      if (!mismatches.length) {
+        tbody.innerHTML = "";
+        empty.style.display = "block";
+        return;
+      }
+      empty.style.display = "none";
+      tbody.innerHTML = mismatches
+        .map(
+          (d) => `
+        <tr class="mismatch">
+          <td>${d.label}</td>
+          <td>${d.monthLabel}</td>
+          <td class="num">${money(d.calc)}</td>
+          <td class="num">${money(d.ending)}</td>
+          <td class="num">${money(d.diff)}</td>
+          <td><span class="badge">Mismatch</span></td>
+        </tr>`
+        )
+        .join("");
+    }
+
+    function drawChart(mismatches) {
+      const canvas = document.getElementById("diffChart");
+      const empty = document.getElementById("chartEmpty");
+      const ctx = canvas.getContext("2d");
+      const dpr = window.devicePixelRatio || 1;
+      const cssW = canvas.clientWidth || canvas.parentElement.clientWidth;
+      const cssH = 260;
+
+      canvas.style.display = mismatches.length ? "block" : "none";
+      empty.style.display = mismatches.length ? "none" : "block";
+      if (!mismatches.length) {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        return;
+      }
+
+      canvas.width = cssW * dpr;
+      canvas.height = cssH * dpr;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.clearRect(0, 0, cssW, cssH);
+
+      const pad = { t: 20, r: 12, b: 42, l: 48 };
+      const w = cssW - pad.l - pad.r;
+      const h = cssH - pad.t - pad.b;
+      const vals = mismatches.map((d) => d.diff);
+      const maxAbs = Math.max(10, ...vals.map(Math.abs));
+      const yScale = (v) => pad.t + h / 2 - (v / maxAbs) * (h / 2);
+      const gap = w / mismatches.length;
+      const barW = Math.max(10, Math.min(42, gap * 0.55));
+
+      ctx.strokeStyle = "#3d5160";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(pad.l, yScale(0));
+      ctx.lineTo(pad.l + w, yScale(0));
+      ctx.stroke();
+
+      ctx.fillStyle = "#8a9bab";
+      ctx.font = "11px IBM Plex Mono, monospace";
+      ctx.textAlign = "right";
+      [maxAbs, 0, -maxAbs].forEach((v) => {
+        const label = v === 0 ? "0" : v > 0 ? `+${Math.round(v)}` : `${Math.round(v)}`;
+        ctx.fillText(label, pad.l - 8, yScale(v) + 3);
+      });
+
+      mismatches.forEach((d, i) => {
+        const x = pad.l + i * gap + (gap - barW) / 2;
+        const y0 = yScale(0);
+        const y1 = yScale(d.diff);
+        const top = Math.min(y0, y1);
+        const height = Math.max(3, Math.abs(y1 - y0));
+        ctx.fillStyle = "#f07178";
+        ctx.fillRect(x, top, barW, height);
+
+        ctx.fillStyle = "#8a9bab";
+        ctx.font = "10px DM Sans, sans-serif";
+        ctx.textAlign = "center";
+        const label = mismatches.length > 18 ? d.label.replace(/^[A-Za-z]+ /, "") : d.label;
+        ctx.fillText(label, x + barW / 2, cssH - 14);
+      });
+    }
+
+    function clearAll() {
+      allDays = [];
+      loadedFiles = [];
+      renderFileTags();
+      clearBtn.disabled = true;
+      results.classList.remove("show");
+      clearError();
+      fileInput.value = "";
+    }
+
+    browseBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      fileInput.click();
+    });
+    uploadZone.addEventListener("click", () => fileInput.click());
+    uploadZone.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") fileInput.click();
+    });
+    fileInput.addEventListener("change", () => handleFiles(fileInput.files));
+    clearBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      clearAll();
+    });
+    monthFilter.addEventListener("change", renderAll);
+
+    ["dragenter", "dragover"].forEach((evt) => {
+      uploadZone.addEventListener(evt, (e) => {
+        e.preventDefault();
+        uploadZone.classList.add("dragover");
+      });
+    });
+    ["dragleave", "drop"].forEach((evt) => {
+      uploadZone.addEventListener(evt, (e) => {
+        e.preventDefault();
+        uploadZone.classList.remove("dragover");
+      });
+    });
+    uploadZone.addEventListener("drop", (e) => {
+      handleFiles(e.dataTransfer.files);
+    });
+
+    window.addEventListener("resize", () => {
+      if (allDays.length) renderAll();
+    });
+  </script>
+</body>
+</html>

@@ -613,7 +613,7 @@
         desc: "End-of-month report group. Open a child report from the left panel.",
         cards: [
           { id: "eft-allocation", title: "EFT Allocation", desc: "EFT Allocation report testing module." },
-          { id: "eft-annual", title: "EFT Allocation Annual", desc: "Annual EFT Allocation report testing module." },
+          { id: "eft-annual", title: "EFT Allocation Annual", desc: "Combined Summary match check — Gross Invoices, Delinquent Recovery, Total Collected in Cycle." },
           { id: "accounting-journal", title: "Accounting Journal Entries", desc: "Accounting Journal Entries report testing module." },
         ],
       },
@@ -623,12 +623,7 @@
         desc: "Placeholder — EFT Allocation report testing module.",
         cards: [],
       },
-      "eft-annual": {
-        kicker: "EOM REPORTS",
-        title: "EFT Allocation Annual",
-        desc: "Placeholder — Annual EFT Allocation report testing module.",
-        cards: [],
-      },
+      "eft-annual": { embed: "eft-allocation-annual.html" },
       "accounting-journal": {
         kicker: "EOM REPORTS",
         title: "Accounting Journal Entries",

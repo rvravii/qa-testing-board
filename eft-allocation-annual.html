@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>EFT Allocation Annual · QA Match</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <style>
+    :root {
+      --bg: #0f1419;
+      --surface: #182028;
+      --surface-2: #1e2a33;
+      --border: #2a3944;
+      --text: #e8eef2;
+      --muted: #8a9bab;
+      --accent: #2dd4a8;
+      --accent-dim: rgba(45, 212, 168, 0.14);
+      --danger: #f07178;
+      --danger-dim: rgba(240, 113, 120, 0.14);
+      --blue: #5b8def;
+      --radius: 10px;
+      --font: "DM Sans", system-ui, sans-serif;
+      --mono: "IBM Plex Mono", ui-monospace, monospace;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: var(--font);
+      background: radial-gradient(900px 420px at 10% -10%, #1a2f2a 0%, transparent 55%), var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      line-height: 1.45;
+    }
+    .wrap { max-width: 1100px; margin: 0 auto; padding: 24px 20px 56px; }
+    .brand { font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent); font-weight: 600; }
+    h1 { font-size: clamp(1.4rem, 2.6vw, 1.9rem); font-weight: 700; margin: 6px 0; }
+    .subtitle { color: var(--muted); font-size: 0.95rem; max-width: 62ch; }
+    .upload-zone {
+      margin: 18px 0;
+      border: 1.5px dashed var(--border);
+      border-radius: var(--radius);
+      background: var(--surface);
+      padding: 22px;
+      text-align: center;
+      cursor: pointer;
+    }
+    .upload-zone:hover, .upload-zone.dragover { border-color: var(--accent); background: var(--accent-dim); }
+    .upload-zone h2 { font-size: 1rem; margin-bottom: 6px; }
+    .upload-zone p { color: var(--muted); font-size: 13px; }
+    .hint { margin-top: 8px; font-size: 12px; color: var(--muted); font-family: var(--mono); }
+    .actions { margin-top: 14px; display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+    .btn {
+      font-family: var(--font); font-size: 13px; font-weight: 600;
+      border-radius: 8px; padding: 9px 14px; border: 1px solid var(--border);
+      background: var(--surface-2); color: var(--text); cursor: pointer;
+    }
+    .btn.primary { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); }
+    .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+    #fileInput { display: none; }
+    .error-box {
+      display: none; margin-bottom: 14px; padding: 12px 14px; border-radius: 8px;
+      background: var(--danger-dim); border: 1px solid rgba(240,113,120,0.35); color: var(--danger); font-size: 13px;
+    }
+    .error-box.show { display: block; }
+    .results { display: none; }
+    .results.show { display: block; }
+    .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 14px; }
+    .kpi {
+      background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+      padding: 14px; position: relative; overflow: hidden;
+    }
+    .kpi::before { content: ""; position: absolute; inset: 0 auto 0 0; width: 3px; background: var(--border); }
+    .kpi.ok::before { background: var(--accent); }
+    .kpi.bad::before { background: var(--danger); }
+    .kpi.neutral::before { background: var(--blue); }
+    .kpi .label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 6px; }
+    .kpi .value { font-family: var(--mono); font-size: 1.5rem; font-weight: 500; }
+    .kpi.ok .value { color: var(--accent); }
+    .kpi.bad .value { color: var(--danger); }
+    .panel {
+      background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+      overflow: hidden; margin-bottom: 14px;
+    }
+    .panel-head {
+      display: flex; justify-content: space-between; align-items: baseline; gap: 12px;
+      padding: 12px 14px; border-bottom: 1px solid var(--border);
+    }
+    .panel-head h2 { font-size: 0.95rem; }
+    .panel-head span { font-size: 12px; color: var(--muted); }
+    .table-scroll { overflow: auto; max-height: 520px; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th {
+      position: sticky; top: 0; background: var(--surface-2); text-align: left;
+      font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted);
+      font-weight: 600; padding: 10px 12px; border-bottom: 1px solid var(--border);
+    }
+    th.num, td.num { text-align: right; font-family: var(--mono); }
+    td { padding: 9px 12px; border-bottom: 1px solid rgba(42,57,68,0.7); vertical-align: top; }
+    tr.match td { background: var(--accent-dim); }
+    tr.mismatch td { background: var(--danger-dim); }
+    .badge {
+      display: inline-block; font-size: 11px; font-weight: 600; padding: 3px 8px; border-radius: 999px;
+    }
+    .badge.match { color: var(--accent); background: var(--accent-dim); }
+    .badge.mismatch { color: var(--danger); background: var(--danger-dim); }
+    .meta { color: var(--muted); font-size: 12px; margin-bottom: 12px; font-family: var(--mono); }
+    .toolbar { display: flex; justify-content: flex-end; gap: 8px; margin-bottom: 12px; }
+    .note { margin-top: 10px; color: var(--muted); font-size: 12px; }
+    @media (max-width: 800px) { .kpis { grid-template-columns: 1fr 1fr; } }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="brand">EOM · EFT Allocation Annual</div>
+    <h1>Combined Summary Match Check</h1>
+    <p class="subtitle">
+      Upload EFT Allocation Annual Excel. Tool reads EFT Summary, Tax Summary, and Combined Summary,
+      then validates Gross Invoices, Delinquent Recovery, and Total Collected in Cycle.
+    </p>
+
+    <div class="upload-zone" id="uploadZone" tabindex="0" role="button">
+      <h2>Upload EFT Allocation Annual Excel</h2>
+      <p>Drop file here or choose file. Only summary sheets are parsed.</p>
+      <p class="hint">Needed sheets: EFT Summary · Tax Summary · Combined Summary</p>
+      <div class="actions">
+        <button class="btn primary" type="button" id="browseBtn">Choose Excel file</button>
+        <button class="btn" type="button" id="clearBtn" disabled>Clear</button>
+      </div>
+      <input id="fileInput" type="file" accept=".xlsx,.xls" />
+    </div>
+
+    <div class="error-box" id="errorBox"></div>
+
+    <div class="results" id="results">
+      <div class="meta" id="metaLine"></div>
+      <div class="toolbar">
+        <button class="btn primary" type="button" id="exportCsvBtn">Export CSV</button>
+      </div>
+      <section class="kpis">
+        <div class="kpi neutral"><div class="label">Checks</div><div class="value" id="kpiTotal">0</div></div>
+        <div class="kpi ok"><div class="label">Match</div><div class="value" id="kpiMatch">0</div></div>
+        <div class="kpi bad"><div class="label">Mismatch</div><div class="value" id="kpiMis">0</div></div>
+        <div class="kpi ok"><div class="label">Match rate</div><div class="value" id="kpiRate">—</div></div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <h2>Validation results</h2>
+          <span id="asOfLabel">—</span>
+        </div>
+        <div class="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>Check</th>
+                <th>Source A</th>
+                <th class="num">Value A</th>
+                <th>Source B</th>
+                <th class="num">Value B</th>
+                <th class="num">Difference</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody id="tbody"></tbody>
+          </table>
+        </div>
+      </section>
+      <p class="note">Tolerance ± $0.02. Large workbooks are OK — only the 3 summary sheets are loaded.</p>
+    </div>
+  </div>
+
+  <script>
+    const TOL = 0.02;
+    let lastChecks = [];
+    let lastMeta = {};
+
+    const uploadZone = document.getElementById("uploadZone");
+    const fileInput = document.getElementById("fileInput");
+    const browseBtn = document.getElementById("browseBtn");
+    const clearBtn = document.getElementById("clearBtn");
+    const errorBox = document.getElementById("errorBox");
+    const results = document.getElementById("results");
+
+    function money(n) {
+      if (n === null || n === undefined || Number.isNaN(n)) return "—";
+      const abs = Math.abs(n).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      return n < 0 ? `($${abs})` : `$${abs}`;
+    }
+    function num(v) {
+      if (v === null || v === undefined || v === "") return null;
+      if (typeof v === "number" && Number.isFinite(v)) return v;
+      const s = String(v).replace(/[$,\s]/g, "").replace(/^\((.*)\)$/, "-$1");
+      const n = Number(s);
+      return Number.isFinite(n) ? n : null;
+    }
+    function showError(msg) {
+      errorBox.textContent = msg;
+      errorBox.classList.add("show");
+    }
+    function clearError() {
+      errorBox.textContent = "";
+      errorBox.classList.remove("show");
+    }
+    function sheetToRows(wb, name) {
+      const sheet = wb.Sheets[name];
+      if (!sheet) throw new Error(`Missing sheet: "${name}"`);
+      return XLSX.utils.sheet_to_json(sheet, { header: 1, defval: null, raw: true });
+    }
+    function findRow(rows, pred) {
+      for (let i = 0; i < rows.length; i++) {
+        const c0 = rows[i] && rows[i][0];
+        if (c0 != null && pred(String(c0).trim())) return { index: i, row: rows[i] };
+      }
+      return null;
+    }
+    function findGrandTotal(rows) {
+      return findRow(rows, (s) => /^grand\s*total$/i.test(s));
+    }
+    function labelIncludes(s, parts) {
+      const low = s.toLowerCase();
+      return parts.every((p) => low.includes(p.toLowerCase()));
+    }
+
+    function extract(wb) {
+      const eft = sheetToRows(wb, "EFT Summary");
+      const tax = sheetToRows(wb, "Tax Summary");
+      const comb = sheetToRows(wb, "Combined Summary");
+
+      const asOf =
+        (eft[3] && eft[3][0]) ||
+        (comb[1] && comb[1][0]) ||
+        "As of date not found";
+
+      const eftGT = findGrandTotal(eft);
+      const taxGT = findGrandTotal(tax);
+      if (!eftGT) throw new Error('EFT Summary: "Grand Total" row not found');
+      if (!taxGT) throw new Error('Tax Summary: "Grand Total" row not found');
+
+      // EFT Grand Total columns (1-indexed in Excel):
+      // 11 Gross Invoices Total Amount
+      // 22 Delinquent Recovery Total Amount
+      // 32 Total Collected Total Amount
+      const eftGross = num(eftGT.row[10]);
+      const eftDelinq = num(eftGT.row[21]);
+      const eftCollected = num(eftGT.row[31]);
+
+      // Tax Grand Total:
+      // 6 Gross Invoices Total (including tax)
+      const taxGross = num(taxGT.row[5]);
+
+      // Combined top invoice table "Invoices for ..." Total Amount col 11 (index 10)
+      const dues = findRow(comb, (s) => /^invoices for /i.test(s));
+      const combTopGross = dues ? num(dues.row[10]) : null;
+
+      // Collection Success Recap section
+      const recap = findRow(comb, (s) => labelIncludes(s, ["collection success recap"]));
+      if (!recap) throw new Error('Combined Summary: "Collection Success Recap" not found');
+
+      const grossRecap = findRow(comb.slice(recap.index), (s) => /^gross invoices$/i.test(s));
+      const delinqRecap = findRow(comb.slice(recap.index), (s) => /^delinquent recovery$/i.test(s));
+      const collectedRecap = findRow(comb.slice(recap.index), (s) => /^total collected in cycle$/i.test(s));
+
+      const combRecapGross = grossRecap ? num(grossRecap.row[5]) : null; // Total col (index 5 in recap tables)
+      const combRecapDelinq = delinqRecap ? num(delinqRecap.row[5]) : null;
+      const combRecapCollected = collectedRecap ? num(collectedRecap.row[5]) : null;
+
+      // Also note Combined sheet sometimes puts comparison value in col 7 (index 6)
+      return {
+        asOf: String(asOf),
+        values: {
+          eftGross,
+          taxGross,
+          combTopGross,
+          combRecapGross,
+          eftDelinq,
+          combRecapDelinq,
+          eftCollected,
+          combRecapCollected,
+        },
+      };
+    }
+
+    function buildChecks(values) {
+      const mk = (name, aLabel, aVal, bLabel, bVal) => {
+        const a = aVal;
+        const b = bVal;
+        const okA = a !== null && b !== null;
+        const diff = okA ? Math.round((a - b) * 100) / 100 : null;
+        const status = okA && Math.abs(diff) <= TOL ? "Match" : "Mismatch";
+        return {
+          name,
+          aLabel,
+          aVal: a,
+          bLabel,
+          bVal: b,
+          diff,
+          status: okA ? status : "Mismatch",
+        };
+      };
+
+      return [
+        mk(
+          "Gross Invoices: EFT Summary vs Tax Summary",
+          "EFT Summary · Grand Total · Gross Invoices",
+          values.eftGross,
+          "Tax Summary · Grand Total · Gross Invoices",
+          values.taxGross
+        ),
+        mk(
+          "Gross Invoices: Combined top Invoice Total vs EFT",
+          "Combined Summary · Dues Invoices Total",
+          values.combTopGross,
+          "EFT Summary · Gross Invoices Total",
+          values.eftGross
+        ),
+        mk(
+          "Gross Invoices: Combined top Invoice Total vs Tax",
+          "Combined Summary · Dues Invoices Total",
+          values.combTopGross,
+          "Tax Summary · Gross Invoices Total",
+          values.taxGross
+        ),
+        mk(
+          "Gross Invoices: Collection Success Recap vs EFT",
+          "Combined Summary · Recap · Gross Invoices",
+          values.combRecapGross,
+          "EFT Summary · Gross Invoices Total",
+          values.eftGross
+        ),
+        mk(
+          "Gross Invoices: Collection Success Recap vs Tax",
+          "Combined Summary · Recap · Gross Invoices",
+          values.combRecapGross,
+          "Tax Summary · Gross Invoices Total",
+          values.taxGross
+        ),
+        mk(
+          "Delinquent Recovery: Recap vs EFT Summary",
+          "Combined Summary · Recap · Delinquent Recovery",
+          values.combRecapDelinq,
+          "EFT Summary · Delinquent Recovery Total",
+          values.eftDelinq
+        ),
+        mk(
+          "Total Collected in Cycle: Recap vs EFT Summary",
+          "Combined Summary · Recap · Total Collected in Cycle",
+          values.combRecapCollected,
+          "EFT Summary · Total Collected",
+          values.eftCollected
+        ),
+      ];
+    }
+
+    function render(checks, meta) {
+      lastChecks = checks;
+      lastMeta = meta;
+      results.classList.add("show");
+      const match = checks.filter((c) => c.status === "Match").length;
+      const mis = checks.length - match;
+      document.getElementById("kpiTotal").textContent = String(checks.length);
+      document.getElementById("kpiMatch").textContent = String(match);
+      document.getElementById("kpiMis").textContent = String(mis);
+      document.getElementById("kpiRate").textContent = checks.length
+        ? ((match / checks.length) * 100).toFixed(1) + "%"
+        : "—";
+      document.getElementById("asOfLabel").textContent = meta.asOf;
+      document.getElementById("metaLine").textContent = `File: ${meta.fileName} · Sheets parsed: EFT Summary, Tax Summary, Combined Summary`;
+
+      document.getElementById("tbody").innerHTML = checks
+        .map(
+          (c) => `
+        <tr class="${c.status === "Match" ? "match" : "mismatch"}">
+          <td>${c.name}</td>
+          <td>${c.aLabel}</td>
+          <td class="num">${money(c.aVal)}</td>
+          <td>${c.bLabel}</td>
+          <td class="num">${money(c.bVal)}</td>
+          <td class="num">${c.diff === null ? "—" : money(c.diff)}</td>
+          <td><span class="badge ${c.status === "Match" ? "match" : "mismatch"}">${c.status}</span></td>
+        </tr>`
+        )
+        .join("");
+    }
+
+    async function handleFile(file) {
+      clearError();
+      if (!file) return;
+      try {
+        const buf = await file.arrayBuffer();
+        const wb = XLSX.read(buf, {
+          type: "array",
+          sheets: ["EFT Summary", "Tax Summary", "Combined Summary"],
+          cellDates: true,
+        });
+        const extracted = extract(wb);
+        const checks = buildChecks(extracted.values);
+        render(checks, { asOf: extracted.asOf, fileName: file.name });
+        clearBtn.disabled = false;
+      } catch (err) {
+        showError(err.message || "Failed to parse Excel file.");
+        results.classList.remove("show");
+      }
+    }
+
+    function exportCsv() {
+      if (!lastChecks.length) return;
+      const rows = [
+        ["Check", "Source A", "Value A", "Source B", "Value B", "Difference", "Status"],
+        ...lastChecks.map((c) => [
+          c.name,
+          c.aLabel,
+          c.aVal,
+          c.bLabel,
+          c.bVal,
+          c.diff,
+          c.status,
+        ]),
+      ];
+      const csv = rows
+        .map((r) =>
+          r
+            .map((cell) => {
+              const s = cell === null || cell === undefined ? "" : String(cell);
+              return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+            })
+            .join(",")
+        )
+        .join("\n");
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = `eft-allocation-annual-match_${new Date().toISOString().slice(0, 10)}.csv`;
+      a.click();
+      URL.revokeObjectURL(a.href);
+    }
+
+    browseBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      fileInput.click();
+    });
+    uploadZone.addEventListener("click", () => fileInput.click());
+    fileInput.addEventListener("change", () => handleFile(fileInput.files[0]));
+    clearBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      lastChecks = [];
+      results.classList.remove("show");
+      clearError();
+      fileInput.value = "";
+      clearBtn.disabled = true;
+    });
+    document.getElementById("exportCsvBtn").addEventListener("click", exportCsv);
+
+    ["dragenter", "dragover"].forEach((evt) => {
+      uploadZone.addEventListener(evt, (e) => {
+        e.preventDefault();
+        uploadZone.classList.add("dragover");
+      });
+    });
+    ["dragleave", "drop"].forEach((evt) => {
+      uploadZone.addEventListener(evt, (e) => {
+        e.preventDefault();
+        uploadZone.classList.remove("dragover");
+      });
+    });
+    uploadZone.addEventListener("drop", (e) => {
+      const f = e.dataTransfer.files && e.dataTransfer.files[0];
+      if (f) handleFile(f);
+    });
+  </script>
+</body>
+</html>

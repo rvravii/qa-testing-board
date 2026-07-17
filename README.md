@@ -1,28 +1,25 @@
-# Daily Dashboard Analysis (Ignite)
+# ABC Insights · QA Environment
 
-Upload settlement Excel exports (one month or multiple months) and see **mismatch-only** results:
+Dark ABC Fitness Insights-style QA board with left navigation.
 
-- Difference bar chart
-- Difference table
-
-## Live dashboard
-
-After GitHub Pages is enabled:
+## Live
 
 https://rvravii.github.io/settlement-balance-check/
 
-## How to use
+## Navigation
 
-1. Open the live link
-2. Upload `.xlsx` settlement export(s)
-3. Review mismatch chart + table
-4. Filter by month if needed
+- Insight Reports
+- Dashboards
+  - Daily Deposit Analysis (Ignite) — working settlement mismatch tool
+  - New Joins Analysis
+- EOM reports
+  - EFT Allocation
+  - EFT Allocation Annual
+  - Accounting Journal Entries
+- PF reports
+  - DRDR
 
-## Check formula
+## Files
 
-`Starting Balance + Collected + Collections + Refunds + Chargeback + Returns + Deduction + Reimbursement + Less: Payments at Club + Deposit`  
-should equal **Ending Balance** (± $0.02).
-
-## Local
-
-Open `index.html` in a browser (internet needed for the Excel parser CDN).
+- `index.html` — QA board shell
+- `daily-deposit.html` — settlement balance check dashboard

@@ -167,7 +167,31 @@
           </table>
         </div>
       </section>
-      <p class="note">Tolerance ± $0.02. Large workbooks are OK — only the 3 summary sheets are loaded.</p>
+
+      <section class="panel" id="clubPanel" style="display:none">
+        <div class="panel-head">
+          <h2>Club-level Gross Invoice mismatches</h2>
+          <span id="clubScanStatus">—</span>
+        </div>
+        <div class="meta" id="clubExplain" style="padding: 0 14px 10px"></div>
+        <div class="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>Club</th>
+                <th class="num">Top Invoice Total</th>
+                <th class="num">Recap Gross Invoices</th>
+                <th class="num">EFT Gross Invoices</th>
+                <th class="num">Difference (Recap − Top)</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody id="clubTbody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <p class="note">Tolerance ± $0.02. Summary sheets load first; club scan runs only when Combined top Invoice Total ≠ Recap Gross Invoices.</p>
     </div>
   </div>
 
@@ -175,6 +199,8 @@
     const TOL = 0.02;
     let lastChecks = [];
     let lastMeta = {};
+    let lastClubRows = [];
+    let lastFileBuffer = null;
 
     const uploadZone = document.getElementById("uploadZone");
     const fileInput = document.getElementById("fileInput");
@@ -182,6 +208,10 @@
     const clearBtn = document.getElementById("clearBtn");
     const errorBox = document.getElementById("errorBox");
     const results = document.getElementById("results");
+    const clubPanel = document.getElementById("clubPanel");
+    const clubTbody = document.getElementById("clubTbody");
+    const clubScanStatus = document.getElementById("clubScanStatus");
+    const clubExplain = document.getElementById("clubExplain");
 
     function money(n) {
       if (n === null || n === undefined || Number.isNaN(n)) return "—";
@@ -353,6 +383,100 @@
       ];
     }
 
+    function buildEftGrossMap(eftRows) {
+      const map = new Map();
+      for (let i = 5; i < eftRows.length; i++) {
+        const row = eftRows[i];
+        if (!row || row[0] == null) continue;
+        const name = String(row[0]).trim();
+        if (/^grand\s*total$/i.test(name)) continue;
+        const gross = num(row[10]);
+        if (gross === null) continue;
+        // key by club code prefix before " - "
+        const code = name.split(" - ")[0].trim();
+        map.set(code, { name, gross });
+      }
+      return map;
+    }
+
+    function extractClubMetrics(rows) {
+      let clubName = rows[0] && rows[0][0] != null ? String(rows[0][0]).trim() : "";
+      let topInvoice = null;
+      let recapGross = null;
+      let inRecap = false;
+      for (const row of rows) {
+        if (!row || row[0] == null) continue;
+        const label = String(row[0]).trim();
+        const low = label.toLowerCase();
+        if (low.startsWith("invoices for")) {
+          topInvoice = num(row[10]);
+        }
+        if (low === "collection success recap") inRecap = true;
+        if (inRecap && low === "gross invoices") {
+          recapGross = num(row[5]);
+          break;
+        }
+      }
+      return { clubName, topInvoice, recapGross };
+    }
+
+    function findClubMismatches(wb, eftMap) {
+      const skip = new Set(["Legend", "EFT Summary", "Tax Summary", "Combined Summary"]);
+      const mismatches = [];
+      for (const sheetName of wb.SheetNames) {
+        if (skip.has(sheetName)) continue;
+        // club sheets are usually numeric codes
+        if (!/^\d+$/.test(String(sheetName).trim())) continue;
+        const rows = sheetToRows(wb, sheetName);
+        const m = extractClubMetrics(rows);
+        const eft = eftMap.get(String(sheetName).trim());
+        const top = m.topInvoice == null ? 0 : m.topInvoice;
+        const recap = m.recapGross == null ? (eft ? eft.gross : null) : m.recapGross;
+        if (recap === null) continue;
+        const diff = Math.round((recap - top) * 100) / 100;
+        if (Math.abs(diff) <= TOL) continue;
+        mismatches.push({
+          club: m.clubName || (eft ? eft.name : sheetName),
+          code: String(sheetName).trim(),
+          topInvoice: top,
+          recapGross: recap,
+          eftGross: eft ? eft.gross : null,
+          diff,
+        });
+      }
+      mismatches.sort((a, b) => Math.abs(b.diff) - Math.abs(a.diff));
+      return mismatches;
+    }
+
+    function renderClubs(clubRows, summaryDiff) {
+      lastClubRows = clubRows;
+      if (!clubRows.length) {
+        clubPanel.style.display = "none";
+        return;
+      }
+      clubPanel.style.display = "block";
+      const sumDiff = Math.round(clubRows.reduce((s, r) => s + r.diff, 0) * 100) / 100;
+      clubScanStatus.textContent = `${clubRows.length} club(s) with issue`;
+      clubExplain.textContent =
+        `Combined top Invoice Total vs Recap Gross gap is ${money(summaryDiff)}. ` +
+        `Below clubs have Top Invoice Total ≠ Recap Gross Invoices. ` +
+        `Sum of club differences = ${money(sumDiff)}.`;
+
+      clubTbody.innerHTML = clubRows
+        .map(
+          (r) => `
+        <tr class="mismatch">
+          <td>${r.club}</td>
+          <td class="num">${money(r.topInvoice)}</td>
+          <td class="num">${money(r.recapGross)}</td>
+          <td class="num">${money(r.eftGross)}</td>
+          <td class="num">${money(r.diff)}</td>
+          <td><span class="badge mismatch">Mismatch</span></td>
+        </tr>`
+        )
+        .join("");
+    }
+
     function render(checks, meta) {
       lastChecks = checks;
       lastMeta = meta;
@@ -389,15 +513,46 @@
       if (!file) return;
       try {
         const buf = await file.arrayBuffer();
-        const wb = XLSX.read(buf, {
+        lastFileBuffer = buf;
+        lastClubRows = [];
+        clubPanel.style.display = "none";
+
+        const wbSummary = XLSX.read(buf, {
           type: "array",
           sheets: ["EFT Summary", "Tax Summary", "Combined Summary"],
           cellDates: true,
         });
-        const extracted = extract(wb);
+        const extracted = extract(wbSummary);
         const checks = buildChecks(extracted.values);
         render(checks, { asOf: extracted.asOf, fileName: file.name });
         clearBtn.disabled = false;
+
+        const needClubScan = checks.some(
+          (c) =>
+            c.status === "Mismatch" &&
+            c.name.includes("Combined top Invoice Total")
+        );
+
+        if (!needClubScan) return;
+
+        clubPanel.style.display = "block";
+        clubScanStatus.textContent = "Scanning clubs…";
+        clubExplain.textContent =
+          "Loading club sheets to locate where Top Invoice Total differs from Recap Gross Invoices.";
+        clubTbody.innerHTML = "";
+
+        // Allow UI to paint before heavy parse
+        await new Promise((r) => setTimeout(r, 50));
+
+        const wbFull = XLSX.read(buf, { type: "array", cellDates: true });
+        const eftRows = sheetToRows(wbFull, "EFT Summary");
+        const eftMap = buildEftGrossMap(eftRows);
+        const clubs = findClubMismatches(wbFull, eftMap);
+        const summaryDiff =
+          extracted.values.combRecapGross != null && extracted.values.combTopGross != null
+            ? Math.round((extracted.values.combRecapGross - extracted.values.combTopGross) * 100) / 100
+            : null;
+        renderClubs(clubs, summaryDiff);
       } catch (err) {
         showError(err.message || "Failed to parse Excel file.");
         results.classList.remove("show");
@@ -418,6 +573,21 @@
           c.status,
         ]),
       ];
+      if (lastClubRows.length) {
+        rows.push([]);
+        rows.push(["Club mismatches (Top Invoice vs Recap Gross)"]);
+        rows.push([
+          "Club",
+          "Top Invoice Total",
+          "Recap Gross Invoices",
+          "EFT Gross Invoices",
+          "Difference (Recap - Top)",
+          "Status",
+        ]);
+        for (const r of lastClubRows) {
+          rows.push([r.club, r.topInvoice, r.recapGross, r.eftGross, r.diff, "Mismatch"]);
+        }
+      }
       const csv = rows
         .map((r) =>
           r
@@ -445,7 +615,10 @@
     clearBtn.addEventListener("click", (e) => {
       e.stopPropagation();
       lastChecks = [];
+      lastClubRows = [];
+      lastFileBuffer = null;
       results.classList.remove("show");
+      clubPanel.style.display = "none";
       clearError();
       fileInput.value = "";
       clearBtn.disabled = true;

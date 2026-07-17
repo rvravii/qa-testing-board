@@ -1,21 +1,10 @@
-# Published Settlement Dashboard (GitHub Pages)
+# QA Testing Board — published link
 
-## Account
-Logged in as: **rvravii**
+## Fixed link (share this)
+https://rvravii.github.io/qa-testing-board/
 
 ## Repo
-https://github.com/rvravii/settlement-balance-check
+https://github.com/rvravii/qa-testing-board
 
-## Live URL (share with team — no password)
+Old link (redirect may work for a while):
 https://rvravii.github.io/settlement-balance-check/
-
-## Update later
-```bash
-cd /Users/raviranjan/Learning/powerbi-settlement-check
-# edit index.html / settlement-dashboard.html
-cp settlement-dashboard.html index.html   # if you edit the source file
-git add -A
-git commit -m "Update dashboard"
-git push
-```
-GitHub Pages will republish automatically in ~1 minute.

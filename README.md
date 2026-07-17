@@ -1,25 +1,17 @@
-# ABC Insights · QA Environment
+# QA Testing Board
 
-Dark ABC Fitness Insights-style QA board with left navigation.
+Fixed public link for ABC Insights QA testing.
 
-## Live
+## Live (fixed link)
 
-https://rvravii.github.io/settlement-balance-check/
+**https://rvravii.github.io/qa-testing-board/**
 
-## Navigation
+## Modules
 
-- Insight Reports
-- Dashboards
-  - Daily Deposit Analysis (Ignite) — working settlement mismatch tool
-  - New Joins Analysis
-- EOM reports
-  - EFT Allocation
-  - EFT Allocation Annual
-  - Accounting Journal Entries
-- PF reports
-  - DRDR
+- **Dashboards → Daily Deposit Analysis (Ignite)** — settlement balance mismatch check
+- **EOM reports → EFT Allocation Annual** — Combined Summary match + club-level Gross Invoice differences
+- Other modules: New Joins, EFT Allocation, Accounting Journal Entries, DRDR (placeholders)
 
-## Files
+## Repo
 
-- `index.html` — QA board shell
-- `daily-deposit.html` — settlement balance check dashboard
+https://github.com/rvravii/qa-testing-board

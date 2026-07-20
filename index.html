@@ -279,6 +279,24 @@
       overflow: hidden;
     }
 
+    .embed-host {
+      width: 100%;
+      height: calc(100vh - 64px);
+      position: relative;
+    }
+
+    .embed-host.hidden { display: none !important; }
+
+    .embed-frame {
+      width: 100%;
+      height: 100%;
+      border: 0;
+      background: #0f1419;
+      display: none;
+    }
+
+    .embed-frame.active { display: block; }
+
     .hero {
       position: relative;
       overflow: hidden;
@@ -453,11 +471,13 @@
 
     .embed-frame {
       width: 100%;
-      height: calc(100vh - 64px);
+      height: 100%;
       border: 0;
       background: #0f1419;
-      display: block;
+      display: none;
     }
+
+    .embed-frame.active { display: block; }
 
     .hidden { display: none !important; }
 
@@ -493,12 +513,7 @@
         </div>
       </div>
       <div class="top-actions">
-        <div class="qa-pill">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 3l7 3v5c0 5-3 8-7 10-4-2-7-5-7-10V6l7-3z" stroke="currentColor" stroke-width="1.8"/></svg>
-          QA
-        </div>
-        <div class="avatar">QA</div>
-        <div class="avatar ghost" aria-hidden="true">
+        <div class="avatar ghost" title="Profile" aria-label="Profile">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="3.5" stroke="currentColor" stroke-width="1.7"/><path d="M5 19c1.5-3.5 4-5 7-5s5.5 1.5 7 5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
         </div>
       </div>
@@ -568,7 +583,8 @@
       </aside>
 
       <main class="main" id="main">
-        <!-- filled by JS -->
+        <div id="panelHost"></div>
+        <div class="embed-host hidden" id="embedHost"></div>
       </main>
     </div>
   </div>
@@ -642,7 +658,10 @@
     };
 
     const main = document.getElementById("main");
+    const panelHost = document.getElementById("panelHost");
+    const embedHost = document.getElementById("embedHost");
     let current = "pf-reports";
+    const embedCache = new Map(); // pageId -> iframe
 
     function setActiveNav(page) {
       document.querySelectorAll(".nav-home, .nav-child, .nav-item").forEach((el) => el.classList.remove("active"));
@@ -665,6 +684,37 @@
       }
     }
 
+    function hideAllEmbeds() {
+      embedHost.querySelectorAll("iframe.embed-frame").forEach((frame) => {
+        frame.classList.remove("active");
+      });
+    }
+
+    function showEmbed(page, src) {
+      main.classList.add("embed");
+      panelHost.classList.add("hidden");
+      embedHost.classList.remove("hidden");
+      hideAllEmbeds();
+
+      let frame = embedCache.get(page);
+      if (!frame) {
+        frame = document.createElement("iframe");
+        frame.className = "embed-frame";
+        frame.title = page;
+        frame.src = src;
+        embedHost.appendChild(frame);
+        embedCache.set(page, frame);
+      }
+      frame.classList.add("active");
+    }
+
+    function showPanel() {
+      main.classList.remove("embed");
+      embedHost.classList.add("hidden");
+      panelHost.classList.remove("hidden");
+      hideAllEmbeds();
+    }
+
     function renderPage(page) {
       current = page;
       const cfg = PAGES[page] || PAGES.home;
@@ -672,12 +722,11 @@
       history.replaceState(null, "", `#${page}`);
 
       if (cfg.embed) {
-        main.classList.add("embed");
-        main.innerHTML = `<iframe class="embed-frame" title="Daily Deposit Analysis" src="${cfg.embed}"></iframe>`;
+        showEmbed(page, cfg.embed);
         return;
       }
 
-      main.classList.remove("embed");
+      showPanel();
       const ready = !!cfg.ready || page === "daily-deposit";
       const badge = ready
         ? `<div class="hero-badge ready">Ready for QA</div>`
@@ -699,7 +748,7 @@
         )
         .join("");
 
-      main.innerHTML = `
+      panelHost.innerHTML = `
         <section class="hero">
           ${badge}
           <div>
@@ -720,7 +769,7 @@
         </div>
       `;
 
-      main.querySelectorAll("[data-open]").forEach((btn) => {
+      panelHost.querySelectorAll("[data-open]").forEach((btn) => {
         btn.addEventListener("click", () => renderPage(btn.getAttribute("data-open")));
       });
     }

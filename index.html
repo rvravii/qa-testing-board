@@ -633,8 +633,8 @@
           { id: "accounting-journal", title: "Accounting Journal Entries", desc: "Accounting Journal Entries report testing module." },
         ],
       },
-      "eft-allocation": { embed: "eft-allocation.html" },
-      "eft-annual": { embed: "eft-allocation-annual.html" },
+      "eft-allocation": { embed: "eft-allocation.html?v=20260720b" },
+      "eft-annual": { embed: "eft-allocation-annual.html?v=20260720c" },
       "accounting-journal": {
         kicker: "EOM REPORTS",
         title: "Accounting Journal Entries",
@@ -704,7 +704,11 @@
         frame.src = src;
         embedHost.appendChild(frame);
         embedCache.set(page, frame);
+      } else if (frame.dataset.src !== src) {
+        // Force reload when embed URL/version changes (avoids stale cached report UI)
+        frame.src = src;
       }
+      frame.dataset.src = src;
       frame.classList.add("active");
     }
 

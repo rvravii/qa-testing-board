@@ -187,7 +187,8 @@
     <h1>EFT Allocation Annual</h1>
     <p class="sub">
       Step 1 — upload EFT Allocation Annual (EFT / Tax / Combined Summary checks).<br />
-      Step 2 — upload Royalty Report + Upgraded Club List (PFAQ) for Gross Invoice validation vs Tax Summary.
+      Step 2 — upload Royalty Report + Upgraded Club List (PFAQ) for Gross Invoice validation vs Tax Summary.<br />
+      <span style="color:#86efac">Build v1.4 · Create Bug ticket</span>
     </p>
 
     <!-- STEP 1: EFT -->
@@ -196,9 +197,13 @@
       <div class="upload-row">
         <input id="file" type="file" accept=".xlsx,.xls,.xlsm" />
         <button class="btn" id="runBtn" disabled>Run EFT checks</button>
+        <button class="btn bug" id="createBugBtn" disabled title="Enabled when EFT / Tax / Combined Summary differences are found">Create Bug</button>
         <button class="btn ghost" id="clearBtn">Clear all</button>
       </div>
       <div class="meta" id="meta">Waiting for EFT file…</div>
+      <div class="note" id="bugHint" style="margin-top:8px">
+        <strong>Create Bug</strong> activates after Run EFT checks when EFT / Tax / Combined Summary differences are found.
+      </div>
       <div class="note" style="margin-top:8px">
         Reads <strong>EFT Summary</strong>, <strong>Tax Summary</strong>, and <strong>Combined Summary</strong> only.
       </div>
@@ -215,11 +220,7 @@
       </div>
 
       <div class="card">
-        <div class="upload-row" style="justify-content:space-between; align-items:center">
-          <h2 class="section-title" style="margin:0">Summary validations</h2>
-          <button class="btn bug" id="createBugBtn" disabled title="Enabled when EFT / Tax / Combined Summary differences are found">Create Bug</button>
-        </div>
-        <div class="note" id="bugHint" style="margin:8px 0 0">Create Bug activates when summary checks fail.</div>
+        <h2 class="section-title">Summary validations</h2>
         <div class="checks" id="checks"></div>
       </div>
 

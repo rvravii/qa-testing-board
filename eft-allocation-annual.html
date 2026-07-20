@@ -116,6 +116,65 @@
     .row-only-roy { background: rgba(245, 158, 11, 0.10); }
     .row-only-tax { background: rgba(96, 165, 250, 0.10); }
     .legend { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0 12px; }
+    .btn.bug {
+      background: #dc2626; color: #fff;
+    }
+    .btn.bug:disabled {
+      background: #7f1d1d; color: #fecaca; opacity: 0.45;
+    }
+    .modal-backdrop {
+      position: fixed; inset: 0; background: rgba(2, 6, 23, 0.72);
+      display: none; align-items: center; justify-content: center;
+      padding: 20px; z-index: 1000;
+    }
+    .modal-backdrop.open { display: flex; }
+    .modal {
+      width: min(860px, 100%); max-height: min(90vh, 920px);
+      background: #fff; color: #172b4d; border-radius: 12px;
+      box-shadow: 0 24px 64px rgba(0,0,0,0.35);
+      display: flex; flex-direction: column; overflow: hidden;
+    }
+    .modal-head {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 12px; padding: 14px 18px; border-bottom: 1px solid #dfe1e6;
+      background: #f7f8f9;
+    }
+    .modal-head h2 { margin: 0; font-size: 1.05rem; color: #172b4d; }
+    .modal-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+    .modal-actions .btn { padding: 8px 12px; font-size: 0.85rem; }
+    .modal-actions .btn.ghost {
+      background: #fff; color: #172b4d; border: 1px solid #dfe1e6;
+    }
+    .modal-body { overflow: auto; padding: 18px 20px 24px; }
+    .ticket {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+      font-size: 14px; line-height: 1.55; color: #172b4d;
+    }
+    .ticket h3 {
+      margin: 0 0 10px; font-size: 15px; font-weight: 700;
+      display: flex; align-items: center; gap: 6px;
+    }
+    .ticket .meta-block { margin-bottom: 16px; }
+    .ticket .meta-block div { margin: 2px 0; }
+    .ticket .label { font-weight: 700; }
+    .ticket .section { margin-top: 16px; }
+    .ticket .section-title {
+      font-weight: 700; margin-bottom: 8px; color: #172b4d;
+    }
+    .ticket ol { margin: 0; padding-left: 22px; }
+    .ticket li { margin: 4px 0; }
+    .ticket .actual { color: #de350b; font-weight: 600; }
+    .ticket .expected { color: #006644; font-weight: 600; }
+    .ticket .muted { color: #5e6c84; font-size: 13px; }
+    .ticket .club-list { margin: 8px 0 0; padding-left: 18px; }
+    .ticket-edit {
+      display: grid; grid-template-columns: 120px 1fr; gap: 8px; align-items: center;
+      margin: 10px 0 14px; padding: 12px; background: #f4f5f7; border-radius: 8px;
+    }
+    .ticket-edit label { font-size: 12px; font-weight: 700; color: #5e6c84; }
+    .ticket-edit input {
+      border: 1px solid #dfe1e6; border-radius: 6px; padding: 7px 9px; font-size: 13px;
+    }
     @media (max-width: 980px) {
       .kpis { grid-template-columns: 1fr 1fr; }
       .check { grid-template-columns: 1fr; }
@@ -156,7 +215,11 @@
       </div>
 
       <div class="card">
-        <h2 class="section-title">Summary validations</h2>
+        <div class="upload-row" style="justify-content:space-between; align-items:center">
+          <h2 class="section-title" style="margin:0">Summary validations</h2>
+          <button class="btn bug" id="createBugBtn" disabled title="Enabled when EFT / Tax / Combined Summary differences are found">Create Bug</button>
+        </div>
+        <div class="note" id="bugHint" style="margin:8px 0 0">Create Bug activates when summary checks fail.</div>
         <div class="checks" id="checks"></div>
       </div>
 
@@ -368,6 +431,29 @@
     </div>
   </div>
 
+  <div class="modal-backdrop" id="bugModal" role="dialog" aria-modal="true" aria-labelledby="bugModalTitle">
+    <div class="modal">
+      <div class="modal-head">
+        <h2 id="bugModalTitle">Bug ticket — EFT Allocation Annual</h2>
+        <div class="modal-actions">
+          <button class="btn ghost" type="button" id="copyBugBtn">Copy ticket</button>
+          <button class="btn ghost" type="button" id="closeBugBtn">Close</button>
+        </div>
+      </div>
+      <div class="modal-body">
+        <div class="ticket-edit">
+          <label for="bugEnv">Environment</label>
+          <input id="bugEnv" value="PROD" />
+          <label for="bugWorkspace">Workspace</label>
+          <input id="bugWorkspace" value="PF HQ" />
+          <label for="bugDate">Date</label>
+          <input id="bugDate" value="" />
+        </div>
+        <div class="ticket" id="bugTicket"></div>
+      </div>
+    </div>
+  </div>
+
   <script>
     const TOL = 0.02;
     const $ = (id) => document.getElementById(id);
@@ -378,6 +464,8 @@
     let taxClubsByCode = null; // Map<code, {club, gross, pretax}>
     let royaltyByCode = null;
     let pfaqByCode = new Map(); // code -> {note, status, upgradeDate, onList, ...}
+    let royaltyCompareRows = []; // for CSV export
+    let lastBugContext = null;
 
     function pfaqHas(code) {
       return pfaqByCode.has(code);
@@ -498,6 +586,180 @@
         recapDelinquent: delinqRecap ? cellNum(delinqRecap.row, 5) : 0,
         recapTotalCollected: collectedRecap ? cellNum(collectedRecap.row, 5) : 0,
       };
+    }
+
+    function extractAsOf(eftRows, taxRows, combRows) {
+      for (const rows of [combRows, eftRows, taxRows]) {
+        for (const r of (rows || []).slice(0, 10)) {
+          const s = String(r?.[0] ?? "").trim();
+          if (!s) continue;
+          const m = s.match(/as of\s+([\d\/\-]+)/i);
+          if (m) return m[1];
+          if (/^as of\s+/i.test(s)) return s.replace(/^as of\s+/i, "").trim();
+        }
+      }
+      return "";
+    }
+
+    function formatBugDate(asOf) {
+      if (!asOf) return "";
+      // e.g. 6/30/2026 → June'26 full month (assume M/D/Y)
+      const m = String(asOf).match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/);
+      if (!m) return asOf;
+      let mo = Number(m[1]);
+      let day = Number(m[2]);
+      let year = Number(m[3]);
+      if (year < 100) year += 2000;
+      if (mo > 12 && day <= 12) {
+        const t = mo;
+        mo = day;
+        day = t;
+      }
+      const names = [
+        "January",
+        "February",
+        "March",
+        "April",
+        "May",
+        "June",
+        "July",
+        "August",
+        "September",
+        "October",
+        "November",
+        "December",
+      ];
+      const name = names[mo - 1] || `Month ${mo}`;
+      const yy = String(year).slice(-2);
+      return `${name}'${yy} full month`;
+    }
+
+    function clubCodeDisplay(clubOrCode) {
+      const code = normalizeClubCode(clubOrCode);
+      if (!code) return String(clubOrCode || "");
+      return code.padStart(4, "0");
+    }
+
+    function buildBugTicketHtml({ env, workspace, dateLabel, checks, clubs, values, file }) {
+      const failed = (checks || []).filter((c) => !near(c.leftVal, c.rightVal));
+      const topVsRecap = values
+        ? {
+            top: values.topInvoice,
+            recap: values.recapGross,
+            eft: values.eftGross,
+            tax: values.taxGross,
+            gap: (values.topInvoice || 0) - (values.recapGross || 0),
+          }
+        : null;
+
+      const failedLines = failed.length
+        ? failed
+            .map(
+              (c) =>
+                `<li><strong>${c.name}</strong>: ${c.leftLabel} ${money(c.leftVal)} vs ${c.rightLabel} ${money(c.rightVal)} (diff ${money((c.leftVal || 0) - (c.rightVal || 0))})</li>`
+            )
+            .join("")
+        : "<li>No failed summary checks.</li>";
+
+      let clubNarrative = "";
+      if (clubs && clubs.length) {
+        const parts = clubs.map((r) => {
+          const code = clubCodeDisplay(r.club);
+          return `For Club ${code}, the Collection Success Recap shows ${money(r.recapGross)} and Dues Invoices / Top Invoice shows ${money(r.topInvoice)} (diff ${money(r.diff)}).`;
+        });
+        clubNarrative = `<p class="actual">After analysis, issue found in these club(s):</p><ul class="club-list">${parts
+          .map((p) => `<li class="actual">${p}</li>`)
+          .join("")}</ul>`;
+      }
+
+      const amountBlock =
+        topVsRecap && Math.abs(topVsRecap.gap) > TOL
+          ? `<p class="actual">The Total Amount in Dues Invoices (${money(
+              topVsRecap.top
+            )}) is not matching with the Gross Invoices in Collection Success Recap (${money(
+              topVsRecap.recap
+            )}). Gap = ${money(topVsRecap.gap)}.</p>
+             <p class="muted">EFT Summary Gross Invoices: ${money(topVsRecap.eft)} · Tax Summary Gross Invoices: ${money(
+              topVsRecap.tax
+            )} (these typically match Collection Success Recap Gross).</p>`
+          : `<p class="actual">Summary differences were found across EFT Summary / Tax Summary / Combined Summary validations.</p>`;
+
+      return `
+        <h3>▾ Key details</h3>
+        <div class="meta-block">
+          <div><span class="label">Environment:</span> ${env}</div>
+          <div><span class="label">Workspace:</span> ${workspace}</div>
+          <div><span class="label">Date:</span> ${dateLabel || "—"}</div>
+          <div><span class="label">Report:</span> EFT Allocation Annual</div>
+          <div class="muted">Source file: ${file || "—"}</div>
+        </div>
+
+        <div class="section">
+          <div class="section-title">Steps to Reproduce:</div>
+          <ol>
+            <li>Log in to the POWER BI.</li>
+            <li>Navigate to the <strong>EFT Allocation Annual</strong> report in the corporate section.</li>
+            <li>Run the report for the above workspace.</li>
+            <li>Navigate to the <strong>Combined Summary</strong> tab.</li>
+            <li>Compare the <strong>Dues Invoice</strong> total amount with <strong>Gross Invoices</strong> for <strong>Collection Success Recap</strong>.</li>
+            <li>Also compare EFT Summary and Tax Summary Gross Invoices against Combined Summary values.</li>
+            ${
+              clubs && clubs.length
+                ? `<li>Navigate to the impacted club sheet(s): ${clubs
+                    .map((r) => clubCodeDisplay(r.club))
+                    .join(", ")}; there are also differences.</li>`
+                : ""
+            }
+          </ol>
+        </div>
+
+        <div class="section">
+          <div class="section-title">Actual Result:</div>
+          ${amountBlock}
+          <p class="actual">Failed QA checks:</p>
+          <ul class="club-list actual">${failedLines}</ul>
+          ${clubNarrative}
+        </div>
+
+        <div class="section">
+          <div class="section-title">Expected Result:</div>
+          <p class="expected">The <strong>Dues Invoices</strong> Total Amount should match with the <strong>Gross Invoices</strong> in Collection Success Recap, and align with EFT Summary and Tax Summary. Additionally, individual club-level data should also match across all sections (Dues Invoices vs Collection Success Recap).</p>
+        </div>
+      `;
+    }
+
+    function buildBugTicketText() {
+      const el = $("bugTicket");
+      if (!el) return "";
+      return el.innerText.replace(/\n{3,}/g, "\n\n").trim();
+    }
+
+    function openBugModal() {
+      if (!lastBugContext) return;
+      const asOf = lastBugContext.asOf;
+      $("bugDate").value = lastBugContext.dateLabel || formatBugDate(asOf) || asOf || "";
+      renderBugTicket();
+      $("bugModal").classList.add("open");
+    }
+
+    function renderBugTicket() {
+      if (!lastBugContext) return;
+      $("bugTicket").innerHTML = buildBugTicketHtml({
+        env: $("bugEnv").value.trim() || "PROD",
+        workspace: $("bugWorkspace").value.trim() || "PF HQ",
+        dateLabel: $("bugDate").value.trim(),
+        checks: lastBugContext.checks,
+        clubs: lastBugContext.clubs,
+        values: lastBugContext.values,
+        file: lastBugContext.fileName,
+      });
+    }
+
+    function setCreateBugEnabled(enabled) {
+      $("createBugBtn").disabled = !enabled;
+      $("bugHint").textContent = enabled
+        ? "Differences found — Create Bug is ready."
+        : "Create Bug activates when summary checks fail.";
     }
 
     function extractClubSheetMetrics(rows) {
@@ -733,9 +995,13 @@
           throw new Error("Required sheets: EFT Summary, Tax Summary, Combined Summary");
         }
 
-        const eft = parseEftSummary(sheetRows(wbSummary, eftName));
-        const tax = parseTaxSummary(sheetRows(wbSummary, taxName));
-        const comb = parseCombinedSummary(sheetRows(wbSummary, combName));
+        const eftRowsSummary = sheetRows(wbSummary, eftName);
+        const taxRowsSummary = sheetRows(wbSummary, taxName);
+        const combRowsSummary = sheetRows(wbSummary, combName);
+        const eft = parseEftSummary(eftRowsSummary);
+        const tax = parseTaxSummary(taxRowsSummary);
+        const comb = parseCombinedSummary(combRowsSummary);
+        const asOf = extractAsOf(eftRowsSummary, taxRowsSummary, combRowsSummary);
 
         taxClubsByCode = new Map();
         for (const c of tax.clubs) {
@@ -857,6 +1123,22 @@
             : "All good on club Top vs Recap.";
         $("exportClubCsvBtn").disabled = clubMismatchRows.length === 0;
         setCollapsed($("clubDiffBody"), $("clubDiffChevron"), clubMismatchRows.length === 0);
+
+        const failCount = checks.length - passCount;
+        lastBugContext = {
+          checks,
+          clubs: clubMismatchRows.slice(),
+          values: {
+            topInvoice: comb.topInvoice,
+            recapGross: comb.recapGross,
+            eftGross: eft.invoice,
+            taxGross: tax.gross,
+          },
+          asOf,
+          dateLabel: formatBugDate(asOf),
+          fileName,
+        };
+        setCreateBugEnabled(failCount > 0 || clubMismatchRows.length > 0);
 
         updateRoyaltyRunEnabled();
         $("meta").textContent = `${fileName} · Tax clubs: ${tax.clubs.length} · checks done`;
@@ -1231,6 +1513,28 @@
       URL.revokeObjectURL(a.href);
     });
 
+    $("createBugBtn").addEventListener("click", openBugModal);
+    $("closeBugBtn").addEventListener("click", () => $("bugModal").classList.remove("open"));
+    $("bugModal").addEventListener("click", (e) => {
+      if (e.target === $("bugModal")) $("bugModal").classList.remove("open");
+    });
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") $("bugModal").classList.remove("open");
+    });
+    ["bugEnv", "bugWorkspace", "bugDate"].forEach((id) => {
+      $(id).addEventListener("input", renderBugTicket);
+    });
+    $("copyBugBtn").addEventListener("click", async () => {
+      const text = buildBugTicketText();
+      try {
+        await navigator.clipboard.writeText(text);
+        $("copyBugBtn").textContent = "Copied!";
+        setTimeout(() => ($("copyBugBtn").textContent = "Copy ticket"), 1200);
+      } catch {
+        alert("Copy failed — select the ticket text and copy manually.");
+      }
+    });
+
     $("clearBtn").addEventListener("click", () => {
       fileBuffer = null;
       fileName = "";
@@ -1239,6 +1543,7 @@
       royaltyByCode = null;
       pfaqByCode = new Map();
       royaltyCompareRows = [];
+      lastBugContext = null;
       $("file").value = "";
       $("royaltyFile").value = "";
       $("pfaqFile").value = "";
@@ -1249,6 +1554,8 @@
       $("royaltyRunBtn").disabled = true;
       $("exportClubCsvBtn").disabled = true;
       $("exportRoyaltyCsvBtn").disabled = true;
+      setCreateBugEnabled(false);
+      $("bugModal").classList.remove("open");
       $("results").classList.add("hidden");
       $("royaltyResults").classList.add("hidden");
     });

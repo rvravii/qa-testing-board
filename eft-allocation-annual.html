@@ -188,7 +188,7 @@
     <p class="sub">
       Step 1 — upload EFT Allocation Annual (EFT / Tax / Combined Summary checks).<br />
       Step 2 — upload Royalty Report + Upgraded Club List (PFAQ) for Gross Invoice validation vs Tax Summary.<br />
-      <span style="color:#86efac">Build v1.4 · Create Bug ticket</span>
+      <span style="color:#86efac">Build v1.5 · Create Bug ticket</span>
     </p>
 
     <!-- STEP 1: EFT -->
@@ -968,20 +968,26 @@
       try {
         fileBuffer = await file.arrayBuffer();
         fileName = file.name;
-        // Peek sheet count without parsing all club sheets
-        const peek = XLSX.read(fileBuffer, { type: "array", bookSheets: true });
-        $("meta").textContent = `${file.name} · sheets: ${peek.SheetNames.length}`;
+        let sheetCount = "—";
+        try {
+          const peek = XLSX.read(fileBuffer, { type: "array", bookSheets: true });
+          sheetCount = String(peek.SheetNames.length);
+        } catch (_) {
+          // Sheet count peek is optional — still allow Run
+        }
+        $("meta").textContent = `${file.name} · sheets: ${sheetCount}`;
         $("runBtn").disabled = false;
       } catch (err) {
         fileBuffer = null;
+        $("runBtn").disabled = true;
         $("meta").textContent = "Failed to read file: " + err.message;
       }
     });
 
     $("runBtn").addEventListener("click", async () => {
       if (!fileBuffer) return;
+      $("runBtn").disabled = true;
       try {
-        $("runBtn").disabled = true;
         $("meta").textContent = `${fileName} · running summary checks…`;
 
         // Fast path: only the 3 summary sheets
@@ -1062,19 +1068,39 @@
         ];
 
         const passCount = checks.filter((c) => near(c.leftVal, c.rightVal)).length;
+        const failCount = checks.length - passCount;
         $("checks").innerHTML = checks.map(renderCheck).join("");
         $("kChecks").textContent = String(checks.length);
         $("kPass").textContent = String(passCount);
-        $("kFail").textContent = String(checks.length - passCount);
+        $("kFail").textContent = String(failCount);
 
         clubMismatchRows = [];
-        $("kClub").textContent = "…";
-        $("clubBody").innerHTML =
-          `<tr><td colspan="5" class="note">Checking whether club scan is needed…</td></tr>`;
+        $("kClub").textContent = near(comb.topInvoice, comb.recapGross) ? "0" : "…";
+        $("clubBody").innerHTML = near(comb.topInvoice, comb.recapGross)
+          ? `<tr><td colspan="5" class="pass">Combined top matches Recap — club scan skipped.</td></tr>`
+          : `<tr><td colspan="5" class="note">Scanning club sheets…</td></tr>`;
         $("results").classList.remove("hidden");
         setCollapsed($("clubDiffBody"), $("clubDiffChevron"), false);
 
-        // Club scan only when Combined top ≠ Recap Gross (known root-cause path)
+        lastBugContext = {
+          checks,
+          clubs: [],
+          values: {
+            topInvoice: comb.topInvoice,
+            recapGross: comb.recapGross,
+            eftGross: eft.invoice,
+            taxGross: tax.gross,
+          },
+          asOf,
+          dateLabel: formatBugDate(asOf),
+          fileName,
+        };
+        setCreateBugEnabled(failCount > 0);
+        updateRoyaltyRunEnabled();
+        $("meta").textContent = `${fileName} · Tax clubs: ${tax.clubs.length} · summary done`;
+        // Don't keep Run disabled during long club scan
+        $("runBtn").disabled = false;
+
         if (!near(comb.topInvoice, comb.recapGross)) {
           $("clubMeta").textContent = "Scanning club sheets for Top Invoice vs Recap gaps…";
           await new Promise((r) => setTimeout(r, 40));
@@ -1125,28 +1151,13 @@
         $("exportClubCsvBtn").disabled = clubMismatchRows.length === 0;
         setCollapsed($("clubDiffBody"), $("clubDiffChevron"), clubMismatchRows.length === 0);
 
-        const failCount = checks.length - passCount;
-        lastBugContext = {
-          checks,
-          clubs: clubMismatchRows.slice(),
-          values: {
-            topInvoice: comb.topInvoice,
-            recapGross: comb.recapGross,
-            eftGross: eft.invoice,
-            taxGross: tax.gross,
-          },
-          asOf,
-          dateLabel: formatBugDate(asOf),
-          fileName,
-        };
+        if (lastBugContext) lastBugContext.clubs = clubMismatchRows.slice();
         setCreateBugEnabled(failCount > 0 || clubMismatchRows.length > 0);
-
-        updateRoyaltyRunEnabled();
         $("meta").textContent = `${fileName} · Tax clubs: ${tax.clubs.length} · checks done`;
-        $("runBtn").disabled = false;
       } catch (err) {
-        $("runBtn").disabled = false;
         alert(err.message || String(err));
+      } finally {
+        $("runBtn").disabled = !fileBuffer;
       }
     });
 

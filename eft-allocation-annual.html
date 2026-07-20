@@ -187,8 +187,7 @@
     <h1>EFT Allocation Annual</h1>
     <p class="sub">
       Step 1 — upload EFT Allocation Annual (EFT / Tax / Combined Summary checks).<br />
-      Step 2 — upload Royalty Report + Upgraded Club List (PFAQ) for Gross Invoice validation vs Tax Summary.<br />
-      <span style="color:#86efac">Build v1.5 · Create Bug ticket</span>
+      Step 2 — upload Royalty Report + Upgraded Club List (PFAQ) for Gross Invoice validation vs Tax Summary.
     </p>
 
     <!-- STEP 1: EFT -->
@@ -471,7 +470,6 @@
     function pfaqHas(code) {
       return pfaqByCode.has(code);
     }
-    let royaltyCompareRows = []; // for CSV export
 
     const money = (n) =>
       Number(n || 0).toLocaleString(undefined, { style: "currency", currency: "USD" });

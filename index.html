@@ -598,7 +598,7 @@
         ready: true,
         cards: [
           { id: "daily-deposit", title: "Daily Deposit Analysis (Ignite)", desc: "Settlement balance mismatch check with upload, month filter, and export." },
-          { id: "drdr", title: "DRDR", desc: "PF report module placeholder for upcoming QA validation." },
+          { id: "drdr", title: "DRDR", desc: "DRDR summary + club-wise field validation with filters." },
         ],
       },
       "insight-reports": {
@@ -646,15 +646,10 @@
         title: "PF reports",
         desc: "PF report group. Open DRDR from the left panel.",
         cards: [
-          { id: "drdr", title: "DRDR", desc: "PF report for detailed deposit and reconciliation." },
+          { id: "drdr", title: "DRDR", desc: "Summary + club-wise DRDR field vs total validation with filters." },
         ],
       },
-      drdr: {
-        kicker: "PF REPORTS",
-        title: "DRDR",
-        desc: "Placeholder — DRDR report testing module.",
-        cards: [],
-      },
+      drdr: { embed: "drdr.html?v=1" },
     };
 
     const main = document.getElementById("main");

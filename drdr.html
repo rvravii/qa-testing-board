@@ -1,0 +1,903 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DRDR — ABC Insights QA</title>
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+  <style>
+    :root {
+      --bg: #0b1220;
+      --panel: #111827;
+      --panel2: #0f172a;
+      --line: #1f2937;
+      --text: #e5e7eb;
+      --muted: #94a3b8;
+      --accent: #38bdf8;
+      --ok: #22c55e;
+      --bad: #ef4444;
+      --warn: #f59e0b;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      background: radial-gradient(1200px 600px at 10% -10%, #1e293b 0%, var(--bg) 55%);
+      color: var(--text);
+    }
+    .wrap { max-width: 1280px; margin: 0 auto; padding: 28px 20px 60px; }
+    h1 { margin: 0 0 6px; font-size: 1.55rem; }
+    .sub { color: var(--muted); margin-bottom: 18px; font-size: 0.92rem; line-height: 1.5; }
+    .badge-ver {
+      display: inline-block; margin-left: 8px; padding: 2px 8px; border-radius: 999px;
+      background: #0c1a33; color: #93c5fd; font-size: 0.72rem; font-weight: 700; vertical-align: middle;
+    }
+    .card {
+      background: linear-gradient(180deg, var(--panel), var(--panel2));
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 16px;
+      margin-bottom: 14px;
+    }
+    .upload-row { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+    .btn {
+      background: var(--accent); color: #082f49; border: 0; border-radius: 10px;
+      padding: 10px 14px; font-weight: 700; cursor: pointer;
+    }
+    .btn.ghost { background: transparent; color: var(--text); border: 1px solid var(--line); }
+    .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+    .meta { color: var(--muted); font-size: 0.86rem; margin-top: 8px; }
+    .kpis { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; margin-top: 12px; }
+    .kpi { background: #0b1324; border: 1px solid var(--line); border-radius: 12px; padding: 12px; }
+    .kpi.clickable { cursor: pointer; transition: border-color 0.15s, transform 0.15s; }
+    .kpi.clickable:hover { border-color: var(--accent); transform: translateY(-1px); }
+    .kpi.active { border-color: var(--accent); box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.35); }
+    .kpi .l { color: var(--muted); font-size: 0.78rem; font-weight: 600; }
+    .kpi .v { font-size: 1.35rem; font-weight: 800; margin-top: 4px; }
+    .kpi .hint { color: var(--muted); font-size: 0.72rem; line-height: 1.35; margin-top: 6px; }
+    .ok { color: var(--ok); } .bad { color: var(--bad); } .warn { color: var(--warn); }
+    table { width: 100%; border-collapse: collapse; font-size: 0.86rem; }
+    th, td { padding: 9px 8px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+    th { color: var(--muted); font-weight: 600; }
+    .money { font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .pass { color: var(--ok); font-weight: 700; }
+    .fail { color: var(--bad); font-weight: 700; }
+    .hidden { display: none; }
+    .note { color: var(--muted); font-size: 0.84rem; line-height: 1.45; }
+    .section-title { margin: 0 0 8px; font-size: 1.05rem; }
+    .pill {
+      display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 0.72rem; font-weight: 700;
+    }
+    .pill.ok { background: #052e1a; color: #86efac; }
+    .pill.bad { background: #450a0a; color: #fca5a5; }
+    .pill.warn { background: #422006; color: #fcd34d; }
+    .filters {
+      display: flex; flex-wrap: wrap; gap: 10px; align-items: end; margin: 12px 0;
+    }
+    .field { display: flex; flex-direction: column; gap: 4px; min-width: 140px; }
+    .field label { color: var(--muted); font-size: 0.72rem; font-weight: 700; }
+    .field input, .field select {
+      background: #0b1324; color: var(--text); border: 1px solid var(--line);
+      border-radius: 8px; padding: 8px 10px; font-size: 0.86rem;
+    }
+    .tabs { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+    .tab {
+      background: #0b1324; border: 1px solid var(--line); color: var(--text);
+      border-radius: 999px; padding: 7px 14px; font-weight: 700; cursor: pointer; font-size: 0.84rem;
+    }
+    .tab.active { border-color: var(--accent); color: var(--accent); }
+    .club-row { cursor: pointer; }
+    .club-row:hover td { background: rgba(56, 189, 248, 0.06); }
+    .club-detail {
+      background: #0b1324; border: 1px solid var(--line); border-radius: 10px;
+      padding: 10px 12px; margin: 6px 0 12px;
+    }
+    .progress {
+      height: 6px; background: #0b1324; border-radius: 999px; overflow: hidden; margin-top: 10px;
+    }
+    .progress > div { height: 100%; background: var(--accent); width: 0%; transition: width 0.15s; }
+    .check-grid { display: grid; gap: 6px; }
+    .check-line {
+      display: grid; grid-template-columns: 1.6fr 0.9fr 0.9fr 0.7fr 0.5fr;
+      gap: 8px; font-size: 0.82rem; padding: 6px 0; border-bottom: 1px solid #1a2333;
+    }
+    @media (max-width: 900px) {
+      .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .check-line { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>DRDR Validation <span class="badge-ver">Version 1</span></h1>
+    <div class="sub">
+      Daily Revenue &amp; Deposit Reconciliation — field-level totals vs grand totals,
+      All Locations summary, and club-wise checks with filters.
+    </div>
+
+    <div class="card">
+      <div class="upload-row">
+        <input type="file" id="fileInput" accept=".xlsx,.xls" />
+        <button class="btn" id="runBtn" disabled>Run Validation</button>
+        <button class="btn ghost" id="exportBtn" disabled>Export CSV</button>
+      </div>
+      <div class="meta" id="fileMeta">Waiting for DRDR Excel…</div>
+      <div class="progress hidden" id="progressWrap"><div id="progressBar"></div></div>
+      <div class="kpis hidden" id="kpiRow">
+        <div class="kpi clickable" data-filter-status="all" id="kpiSheets">
+          <div class="l">Sheets checked</div>
+          <div class="v" id="kpiSheetsVal">0</div>
+          <div class="hint">All Locations + clubs</div>
+        </div>
+        <div class="kpi clickable" data-filter-status="pass" id="kpiPass">
+          <div class="l">Pass</div>
+          <div class="v ok" id="kpiPassVal">0</div>
+          <div class="hint">No mismatches</div>
+        </div>
+        <div class="kpi clickable active" data-filter-status="fail" id="kpiFail">
+          <div class="l">Fail</div>
+          <div class="v bad" id="kpiFailVal">0</div>
+          <div class="hint">Click to filter clubs</div>
+        </div>
+        <div class="kpi clickable" data-filter-status="warn" id="kpiWarn">
+          <div class="l">Warn</div>
+          <div class="v warn" id="kpiWarnVal">0</div>
+          <div class="hint">Missing totals / empty</div>
+        </div>
+        <div class="kpi" id="kpiRollup">
+          <div class="l">Club → All Loc rollup</div>
+          <div class="v" id="kpiRollupVal">—</div>
+          <div class="hint" id="kpiRollupHint">MTD Incl Tax</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card hidden" id="resultsCard">
+      <div class="tabs">
+        <button class="tab active" data-tab="summary" type="button">Summary (All Locations)</button>
+        <button class="tab" data-tab="clubs" type="button">Club-wise</button>
+        <button class="tab" data-tab="rollup" type="button">Rollup</button>
+      </div>
+
+      <div id="tabSummary">
+        <h2 class="section-title">All Locations — field vs total</h2>
+        <div class="note" id="summaryMeta"></div>
+        <div class="check-grid" id="summaryChecks" style="margin-top:10px"></div>
+      </div>
+
+      <div id="tabClubs" class="hidden">
+        <h2 class="section-title">Club-wise validation</h2>
+        <div class="filters">
+          <div class="field">
+            <label>Club search</label>
+            <input type="search" id="clubSearch" placeholder="e.g. 00058 or ATLANTA" />
+          </div>
+          <div class="field">
+            <label>Status</label>
+            <select id="statusFilter">
+              <option value="fail">Fail only</option>
+              <option value="warn">Warn only</option>
+              <option value="pass">Pass only</option>
+              <option value="all">All clubs</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Section</label>
+            <select id="sectionFilter">
+              <option value="all">All sections</option>
+              <option value="payment">Payment Type</option>
+              <option value="profit">Profit Center</option>
+              <option value="cross">PayType ↔ Profit</option>
+              <option value="deduction">Deductions / Reimb</option>
+              <option value="analysis">Revenue Analysis</option>
+              <option value="deposit">Deposit chain</option>
+              <option value="structure">Structure / missing</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>&nbsp;</label>
+            <button class="btn ghost" id="clearFiltersBtn" type="button">Reset filters</button>
+          </div>
+        </div>
+        <div class="meta" id="clubFilterMeta"></div>
+        <div style="overflow:auto; margin-top:8px;">
+          <table>
+            <thead>
+              <tr>
+                <th>Club</th>
+                <th>Status</th>
+                <th>Fails</th>
+                <th>Warns</th>
+                <th>MTD Incl Tax</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="clubBody"></tbody>
+          </table>
+        </div>
+        <div id="clubDetailHost"></div>
+      </div>
+
+      <div id="tabRollup" class="hidden">
+        <h2 class="section-title">Clubs sum vs All Locations</h2>
+        <div class="note">Primary metric: Total Revenue by Payment Type → Including Tax (MTD).</div>
+        <div class="check-grid" id="rollupChecks" style="margin-top:10px"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const TOL = 0.02;
+    const MTD_COLS = [
+      { c: 6, label: "ABC Member Billing MTD" },
+      { c: 8, label: "Collect at Club MTD" },
+      { c: 10, label: "Club Acct ABC MTD" },
+      { c: 12, label: "Club Acct Club MTD" },
+      { c: 14, label: "POS Club Collected MTD" },
+      { c: 16, label: "Third Party MTD" },
+      { c: 18, label: "Including Tax MTD" },
+      { c: 20, label: "Sales Tax MTD" },
+      { c: 22, label: "Excluding Tax MTD" },
+    ];
+    const PRIMARY = 18;
+
+    const fileInput = document.getElementById("fileInput");
+    const runBtn = document.getElementById("runBtn");
+    const exportBtn = document.getElementById("exportBtn");
+    const fileMeta = document.getElementById("fileMeta");
+    const progressWrap = document.getElementById("progressWrap");
+    const progressBar = document.getElementById("progressBar");
+
+    let workbook = null;
+    let fileName = "";
+    let summaryResult = null;
+    let clubResults = [];
+    let rollupResult = null;
+    let expandedClub = null;
+
+    function num(v) {
+      if (v == null || v === "") return null;
+      if (typeof v === "number" && Number.isFinite(v)) return v;
+      if (typeof v === "string") {
+        const t = v.replace(/[$,\s]/g, "");
+        if (!t || t === "-") return null;
+        const n = Number(t);
+        return Number.isFinite(n) ? n : null;
+      }
+      return null;
+    }
+
+    function near(a, b, tol = TOL) {
+      const x = a == null ? 0 : a;
+      const y = b == null ? 0 : b;
+      return Math.abs(x - y) <= tol;
+    }
+
+    function money(v) {
+      if (v == null || !Number.isFinite(v)) return "—";
+      return v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+
+    function cell(row, c) {
+      return row && c < row.length ? row[c] : null;
+    }
+
+    function label0(row) {
+      const v = cell(row, 0);
+      return v == null ? "" : String(v).replace(/\s+/g, " ").trim();
+    }
+
+    function findRow(rows, pred, from = 0) {
+      for (let i = from; i < rows.length; i++) {
+        const s = label0(rows[i]);
+        if (s && pred(s)) return i;
+      }
+      return -1;
+    }
+
+    function sumCol(rows, start, end, col) {
+      let s = 0;
+      let any = false;
+      for (let i = start; i < end; i++) {
+        const v = num(cell(rows[i], col));
+        if (v != null) { s += v; any = true; }
+      }
+      return any ? s : 0;
+    }
+
+    function mkCheck({ section, name, expected, actual, status, detail }) {
+      const exp = expected == null ? 0 : expected;
+      const act = actual == null ? 0 : actual;
+      const diff = act - exp;
+      let st = status;
+      if (!st) st = near(exp, act) ? "pass" : "fail";
+      return { section, name, expected: exp, actual: act, diff, status: st, detail: detail || "" };
+    }
+
+    function sheetToRows(ws) {
+      const raw = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null, raw: true });
+      return raw.map((r) => {
+        const out = Array.isArray(r) ? r.slice() : [];
+        while (out.length < 24) out.push(null);
+        return out;
+      });
+    }
+
+    function isClubSheet(name) {
+      return /^\d+/.test(String(name || "").trim());
+    }
+
+    function clubCodeFromSheet(name) {
+      const m = String(name || "").trim().match(/^(\d+)/);
+      return m ? m[1].padStart(5, "0") : "";
+    }
+
+    function validateSheet(rows, sheetName, kind) {
+      const checks = [];
+      const meta = { sheetName, kind, mtdInclTax: null };
+
+      const iPayHdr = findRow(rows, (s) => s === "Payment Type" || s.startsWith("Payment Type"));
+      const iTotColl = findRow(rows, (s) => s.startsWith("Total Collected by Payment Type"));
+      const iTotPay = findRow(rows, (s) => s.startsWith("Total Revenue by Payment Type"));
+      const iPcHdr = findRow(rows, (s) => s === "Profit Center" || s.startsWith("Profit Center"));
+      const iTotPc = findRow(rows, (s) => s.startsWith("Total Revenue by Profit Center"));
+      const iDedHdr = findRow(rows, (s) => s === "Deductions");
+      const iTotDed = findRow(rows, (s) => s.startsWith("Total Deductions"));
+      const iReimbHdr = findRow(rows, (s) => s === "Reimbursements", iTotDed >= 0 ? iTotDed : 0);
+      const iTotReimb = findRow(rows, (s) => s.startsWith("Total Reimbursements"));
+      const iRevAnalysis = findRow(rows, (s) => s.startsWith("Revenue Analysis"));
+      const iDepHdr = findRow(rows, (s) => s.startsWith("Deposited ABC Billing"));
+
+      // Payment Type:
+      // - With Interclub activity: lines → Total Collected → (+ Interclub) → Total Revenue
+      // - No Interclub for period: report skips Total Collected; lines go straight to Total Revenue (not an issue)
+      const emptyPay = findRow(rows, (s) => /no revenue by payment type/i.test(s));
+      const payTotalRow = iTotColl >= 0 ? iTotColl : iTotPay;
+
+      if (iPayHdr >= 0 && payTotalRow >= 0) {
+        const targetLabel = iTotColl >= 0 ? "Total Collected" : "Total Revenue";
+        for (const { c, label } of MTD_COLS) {
+          const expected = sumCol(rows, iPayHdr + 1, payTotalRow, c);
+          const actual = num(cell(rows[payTotalRow], c)) ?? 0;
+          checks.push(mkCheck({
+            section: "payment",
+            name: `PayType lines → ${targetLabel} (${label})`,
+            expected,
+            actual,
+            detail: iTotColl < 0
+              ? "No Interclub activity — Total Collected row not present (expected)"
+              : "",
+          }));
+        }
+      }
+
+      if (iTotColl >= 0 && iTotPay >= 0) {
+        const coll = num(cell(rows[iTotColl], PRIMARY)) ?? 0;
+        // Club sheets can have Due From + Due To Interclub rows between totals.
+        const interIncl = sumCol(rows, iTotColl + 1, iTotPay, PRIMARY);
+        const totPay = num(cell(rows[iTotPay], PRIMARY)) ?? 0;
+        meta.mtdInclTax = totPay;
+        const interRows = Math.max(0, iTotPay - iTotColl - 1);
+        checks.push(mkCheck({
+          section: "payment",
+          name: "Total Collected + Interclub → Total Revenue (Incl Tax MTD)",
+          expected: coll + interIncl,
+          actual: totPay,
+          detail: interRows ? `${interRows} Interclub row(s) between totals` : "No Interclub rows",
+        }));
+
+        const incl = num(cell(rows[iTotColl], 18)) ?? 0;
+        const tax = num(cell(rows[iTotColl], 20)) ?? 0;
+        const excl = num(cell(rows[iTotColl], 22)) ?? 0;
+        checks.push(mkCheck({
+          section: "payment",
+          name: "Tax identity: Incl ≈ Tax + Excl (Total Collected MTD)",
+          expected: tax + excl,
+          actual: incl,
+        }));
+      } else if (iTotPay >= 0) {
+        meta.mtdInclTax = num(cell(rows[iTotPay], PRIMARY));
+        const incl = num(cell(rows[iTotPay], 18)) ?? 0;
+        const tax = num(cell(rows[iTotPay], 20)) ?? 0;
+        const excl = num(cell(rows[iTotPay], 22)) ?? 0;
+        checks.push(mkCheck({
+          section: "payment",
+          name: "Tax identity: Incl ≈ Tax + Excl (Total Revenue MTD)",
+          expected: tax + excl,
+          actual: incl,
+          detail: "No Interclub activity — validated on Total Revenue row",
+        }));
+      }
+      // emptyPay / missing totals with zero-period message → skip (not an issue)
+
+      const emptyPc = findRow(rows, (s) => /no revenue by profit center/i.test(s));
+      if (iPcHdr >= 0 && iTotPc >= 0) {
+        for (const c of [PRIMARY, 22]) {
+          const label = c === PRIMARY ? "Including Tax MTD" : "Excluding Tax MTD";
+          const expected = sumCol(rows, iPcHdr + 1, iTotPc, c);
+          const actual = num(cell(rows[iTotPc], c)) ?? 0;
+          checks.push(mkCheck({
+            section: "profit",
+            name: `Profit Center lines → Total (${label})`,
+            expected,
+            actual,
+          }));
+        }
+      } else if (!emptyPc && !emptyPay && iTotPay >= 0) {
+        // Only flag when sheet has payment revenue but profit section is unexpectedly missing
+        checks.push(mkCheck({
+          section: "structure",
+          name: "Profit Center section",
+          expected: 1,
+          actual: 0,
+          status: "warn",
+          detail: "Section or total not found",
+        }));
+      }
+
+      if (iTotPay >= 0 && iTotPc >= 0) {
+        const a = num(cell(rows[iTotPay], PRIMARY)) ?? 0;
+        const b = num(cell(rows[iTotPc], PRIMARY)) ?? 0;
+        checks.push(mkCheck({
+          section: "cross",
+          name: "PayType Total Revenue ↔ Profit Center Total (Incl Tax MTD)",
+          expected: a,
+          actual: b,
+        }));
+      }
+
+      // Deductions — only first Deductions block before Revenue Analysis
+      if (iDedHdr >= 0 && iTotDed >= 0 && iDedHdr < iTotDed) {
+        for (const c of [6, 18, 4, 17]) {
+          const expected = sumCol(rows, iDedHdr + 1, iTotDed, c);
+          const actual = num(cell(rows[iTotDed], c)) ?? 0;
+          const label = ({ 4: "Day", 6: "ABC/MTD", 17: "Day Incl", 18: "Incl Tax MTD" })[c];
+          checks.push(mkCheck({
+            section: "deduction",
+            name: `Deduction lines → Total Deductions (${label})`,
+            expected,
+            actual,
+          }));
+        }
+      }
+
+      if (iReimbHdr >= 0 && iTotReimb >= 0 && iReimbHdr < iTotReimb) {
+        for (const c of [6, 18]) {
+          const expected = sumCol(rows, iReimbHdr + 1, iTotReimb, c);
+          const actual = num(cell(rows[iTotReimb], c)) ?? 0;
+          checks.push(mkCheck({
+            section: "deduction",
+            name: `Reimb lines → Total Reimbursements (${c === 18 ? "Incl Tax MTD" : "MTD"})`,
+            expected,
+            actual,
+          }));
+        }
+      }
+
+      // Revenue Analysis formulas
+      if (iRevAnalysis >= 0) {
+        const iRev = findRow(rows, (s) => s === "Revenue", iRevAnalysis);
+        const iDed = findRow(rows, (s) => s === "Deductions", iRevAnalysis);
+        const iRei = findRow(rows, (s) => s === "Reimbursements", iRevAnalysis);
+        const iNet = findRow(rows, (s) => s === "Net Revenue", iRevAnalysis);
+        const iTaxPay = findRow(rows, (s) => s.startsWith("Sales Tax Payable"), iRevAnalysis);
+        const iNetLess = findRow(rows, (s) => s.startsWith("Net Revenue Less Tax Payable"), iRevAnalysis);
+        if (iRev >= 0 && iDed >= 0 && iRei >= 0 && iNet >= 0) {
+          const col = 6;
+          const exp = (num(cell(rows[iRev], col)) ?? 0)
+            + (num(cell(rows[iDed], col)) ?? 0)
+            + (num(cell(rows[iRei], col)) ?? 0);
+          const act = num(cell(rows[iNet], col)) ?? 0;
+          checks.push(mkCheck({
+            section: "analysis",
+            name: "Net Revenue = Revenue + Deductions + Reimbursements (MTD)",
+            expected: exp,
+            actual: act,
+          }));
+        }
+        if (iNet >= 0 && iTaxPay >= 0 && iNetLess >= 0) {
+          const col = 6;
+          const exp = (num(cell(rows[iNet], col)) ?? 0) + (num(cell(rows[iTaxPay], col)) ?? 0);
+          const act = num(cell(rows[iNetLess], col)) ?? 0;
+          checks.push(mkCheck({
+            section: "analysis",
+            name: "Net Less Tax = Net Revenue + Sales Tax Payable (MTD)",
+            expected: exp,
+            actual: act,
+          }));
+        }
+      }
+
+      // Deposit chain (All Locations / richer clubs)
+      if (iDepHdr >= 0) {
+        const iPrev = findRow(rows, (s) => s.startsWith("Previous Month Balance Forward"), iDepHdr);
+        const iTotRev = findRow(rows, (s) => s === "Total Revenue", iDepHdr);
+        const iDed2 = findRow(rows, (s) => s === "Deductions", iDepHdr);
+        const iDue = findRow(rows, (s) => s.startsWith("Total Due Client"), iDepHdr);
+        const iTotDep = findRow(rows, (s) => s.startsWith("Total Deposited"), iDepHdr);
+        const iEnd = findRow(rows, (s) => s === "Ending Balance", iDepHdr);
+
+        if (iDue >= 0 && iPrev >= 0 && iTotRev >= 0) {
+          // Sum deposit-block lines from Prev through row before Total Due Client on col 5 (Member Billing)
+          const exp = sumCol(rows, iPrev, iDue, 5);
+          const act = num(cell(rows[iDue], 5)) ?? 0;
+          checks.push(mkCheck({
+            section: "deposit",
+            name: "Deposit block lines → Total Due Client (Member Billing)",
+            expected: exp,
+            actual: act,
+          }));
+        }
+        if (iDue >= 0 && iTotDep >= 0 && iEnd >= 0) {
+          const due = num(cell(rows[iDue], 5)) ?? 0;
+          const dep = num(cell(rows[iTotDep], 5)) ?? 0;
+          const end = num(cell(rows[iEnd], 5)) ?? 0;
+          checks.push(mkCheck({
+            section: "deposit",
+            name: "Ending Balance = Total Due Client − Total Deposited (MB)",
+            expected: due - dep,
+            actual: end,
+          }));
+        }
+        // Deposit lines between Total Due and Total Deposited
+        if (iDue >= 0 && iTotDep >= 0) {
+          const exp = sumCol(rows, iDue + 1, iTotDep, 5);
+          const act = num(cell(rows[iTotDep], 5)) ?? 0;
+          // Club Acct deposits may land in col 7; Total Deposited MB (col5) should match MB deposit lines only
+          checks.push(mkCheck({
+            section: "deposit",
+            name: "Deposit date lines → Total Deposited (Member Billing col)",
+            expected: exp,
+            actual: act,
+          }));
+        }
+      }
+
+      const fails = checks.filter((c) => c.status === "fail").length;
+      const warns = checks.filter((c) => c.status === "warn").length;
+      const status = fails ? "fail" : warns ? "warn" : "pass";
+      return { sheetName, kind, code: clubCodeFromSheet(sheetName), checks, fails, warns, status, meta };
+    }
+
+    function renderCheckLines(checks, host) {
+      if (!checks.length) {
+        host.innerHTML = `<div class="note">No checks.</div>`;
+        return;
+      }
+      host.innerHTML = `
+        <div class="check-line" style="color:var(--muted);font-weight:700">
+          <div>Check</div><div>Expected (sum)</div><div>Actual (total)</div><div>Diff</div><div>Status</div>
+        </div>
+        ${checks.map((c) => `
+          <div class="check-line">
+            <div>
+              <span class="pill ${c.section === "structure" ? "warn" : "ok"}" style="margin-right:6px">${c.section}</span>
+              ${escapeHtml(c.name)}
+              ${c.detail ? `<div class="note">${escapeHtml(c.detail)}</div>` : ""}
+            </div>
+            <div class="money">${money(c.expected)}</div>
+            <div class="money">${money(c.actual)}</div>
+            <div class="money ${near(c.expected, c.actual) ? "" : "bad"}">${money(c.diff)}</div>
+            <div class="${c.status === "pass" ? "pass" : c.status === "warn" ? "warn" : "fail"}">${c.status.toUpperCase()}</div>
+          </div>
+        `).join("")}
+      `;
+    }
+
+    function escapeHtml(s) {
+      return String(s)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+    }
+
+    function setProgress(p) {
+      progressWrap.classList.remove("hidden");
+      progressBar.style.width = `${Math.max(0, Math.min(100, p))}%`;
+    }
+
+    fileInput.addEventListener("change", async () => {
+      const f = fileInput.files?.[0];
+      workbook = null;
+      runBtn.disabled = true;
+      exportBtn.disabled = true;
+      if (!f) {
+        fileMeta.textContent = "Waiting for DRDR Excel…";
+        return;
+      }
+      fileName = f.name;
+      fileMeta.textContent = `Loading ${f.name} (${(f.size / 1024 / 1024).toFixed(2)} MB)…`;
+      try {
+        const buf = await f.arrayBuffer();
+        workbook = XLSX.read(buf, { type: "array", cellDates: true });
+        const clubs = workbook.SheetNames.filter(isClubSheet).length;
+        fileMeta.textContent = `Ready: ${f.name} — ${workbook.SheetNames.length} sheets (${clubs} clubs). Click Run Validation.`;
+        runBtn.disabled = false;
+      } catch (e) {
+        fileMeta.textContent = `Failed to read file: ${e.message || e}`;
+      }
+    });
+
+    runBtn.addEventListener("click", async () => {
+      if (!workbook) return;
+      runBtn.disabled = true;
+      exportBtn.disabled = true;
+      summaryResult = null;
+      clubResults = [];
+      rollupResult = null;
+      expandedClub = null;
+      document.getElementById("resultsCard").classList.add("hidden");
+      setProgress(2);
+
+      try {
+        const names = workbook.SheetNames;
+        const allName = names.find((n) => /^all locations$/i.test(n.trim())) || "All Locations";
+        if (!workbook.Sheets[allName]) throw new Error("All Locations sheet not found");
+
+        fileMeta.textContent = "Validating All Locations…";
+        const summaryRows = sheetToRows(workbook.Sheets[allName]);
+        summaryResult = validateSheet(summaryRows, allName, "summary");
+        setProgress(8);
+
+        const clubNames = names.filter(isClubSheet).sort((a, b) => {
+          const ca = Number(clubCodeFromSheet(a));
+          const cb = Number(clubCodeFromSheet(b));
+          return ca - cb;
+        });
+
+        const batch = 8;
+        for (let i = 0; i < clubNames.length; i += batch) {
+          const slice = clubNames.slice(i, i + batch);
+          for (const name of slice) {
+            const rows = sheetToRows(workbook.Sheets[name]);
+            clubResults.push(validateSheet(rows, name, "club"));
+          }
+          const pct = 8 + Math.round(((i + slice.length) / clubNames.length) * 85);
+          setProgress(pct);
+          fileMeta.textContent = `Validating clubs… ${Math.min(i + slice.length, clubNames.length)} / ${clubNames.length}`;
+          await new Promise((r) => setTimeout(r, 0));
+        }
+
+        // Rollup
+        const allMtd = summaryResult.meta.mtdInclTax;
+        let clubSum = 0;
+        let withTotal = 0;
+        let missing = [];
+        for (const c of clubResults) {
+          if (c.meta.mtdInclTax != null) {
+            clubSum += c.meta.mtdInclTax;
+            withTotal += 1;
+          } else {
+            missing.push(c.sheetName);
+          }
+        }
+        const rollupCheck = mkCheck({
+          section: "cross",
+          name: `Sum of ${withTotal} club Total Revenue (Incl Tax MTD) ↔ All Locations`,
+          expected: allMtd ?? 0,
+          actual: clubSum,
+          detail: missing.length ? `Missing total on: ${missing.join("; ")}` : "All club totals present",
+        });
+        if (missing.length) {
+          rollupCheck.status = near(allMtd, clubSum) ? "warn" : "fail";
+        }
+        rollupResult = { check: rollupCheck, missing, withTotal, clubSum, allMtd };
+
+        setProgress(100);
+        renderAll();
+        fileMeta.textContent = `Done: ${fileName} — ${1 + clubResults.length} sheets validated.`;
+        exportBtn.disabled = false;
+      } catch (e) {
+        fileMeta.textContent = `Validation failed: ${e.message || e}`;
+        console.error(e);
+      } finally {
+        runBtn.disabled = false;
+        setTimeout(() => progressWrap.classList.add("hidden"), 600);
+      }
+    });
+
+    function countClubs(status) {
+      if (status === "all") return clubResults.length;
+      return clubResults.filter((c) => c.status === status).length;
+    }
+
+    function renderAll() {
+      document.getElementById("resultsCard").classList.remove("hidden");
+      document.getElementById("kpiRow").classList.remove("hidden");
+
+      const passN = countClubs("pass");
+      const failN = countClubs("fail");
+      const warnN = countClubs("warn");
+      document.getElementById("kpiSheetsVal").textContent = String(1 + clubResults.length);
+      document.getElementById("kpiPassVal").textContent = String(passN);
+      document.getElementById("kpiFailVal").textContent = String(failN);
+      document.getElementById("kpiWarnVal").textContent = String(warnN);
+
+      const rc = rollupResult?.check;
+      const rollEl = document.getElementById("kpiRollupVal");
+      if (rc) {
+        rollEl.textContent = rc.status === "pass" ? "PASS" : rc.status.toUpperCase();
+        rollEl.className = `v ${rc.status === "pass" ? "ok" : rc.status === "warn" ? "warn" : "bad"}`;
+        document.getElementById("kpiRollupHint").textContent =
+          `Diff ${money(rc.diff)} · clubs ${rollupResult.withTotal}`;
+      }
+
+      const sFails = summaryResult.checks.filter((c) => c.status === "fail");
+      const sWarns = summaryResult.checks.filter((c) => c.status === "warn");
+      document.getElementById("summaryMeta").innerHTML =
+        `<span class="pill ${summaryResult.status === "pass" ? "ok" : summaryResult.status === "warn" ? "warn" : "bad"}">${summaryResult.status.toUpperCase()}</span>
+         ${summaryResult.checks.length} checks · ${sFails.length} fail · ${sWarns.length} warn ·
+         MTD Incl Tax ${money(summaryResult.meta.mtdInclTax)}`;
+      renderCheckLines(summaryResult.checks, document.getElementById("summaryChecks"));
+
+      renderCheckLines(rollupResult ? [rollupResult.check] : [], document.getElementById("rollupChecks"));
+      renderClubs();
+    }
+
+    function filteredClubs() {
+      const q = document.getElementById("clubSearch").value.trim().toLowerCase();
+      const status = document.getElementById("statusFilter").value;
+      const section = document.getElementById("sectionFilter").value;
+
+      return clubResults.filter((c) => {
+        if (status !== "all" && c.status !== status) return false;
+        if (q) {
+          const hay = `${c.code} ${c.sheetName}`.toLowerCase();
+          if (!hay.includes(q)) return false;
+        }
+        if (section !== "all") {
+          const hits = c.checks.filter((ch) => ch.section === section && ch.status !== "pass");
+          // When filtering by section + fail, show clubs that have fail/warn in that section
+          if (status === "pass") {
+            // pass clubs: no non-pass in that section
+            if (c.checks.some((ch) => ch.section === section && ch.status !== "pass")) return false;
+          } else if (status === "all") {
+            // show if any check in section exists
+            if (!c.checks.some((ch) => ch.section === section)) return false;
+          } else {
+            if (!hits.some((ch) => ch.status === status || (status === "fail" && ch.status === "fail"))) {
+              // for fail filter require fail in section; for warn require warn
+              if (status === "fail" && !c.checks.some((ch) => ch.section === section && ch.status === "fail")) return false;
+              if (status === "warn" && !c.checks.some((ch) => ch.section === section && ch.status === "warn")) return false;
+            }
+          }
+        }
+        return true;
+      });
+    }
+
+    function renderClubs() {
+      const list = filteredClubs();
+      const status = document.getElementById("statusFilter").value;
+      const section = document.getElementById("sectionFilter").value;
+      document.getElementById("clubFilterMeta").textContent =
+        `Showing ${list.length} of ${clubResults.length} clubs · status=${status} · section=${section}`;
+
+      const body = document.getElementById("clubBody");
+      const detailHost = document.getElementById("clubDetailHost");
+      detailHost.innerHTML = "";
+
+      if (!list.length) {
+        body.innerHTML = `<tr><td colspan="6" class="note">No clubs match current filters.</td></tr>`;
+        return;
+      }
+
+      body.innerHTML = list.map((c) => `
+        <tr class="club-row" data-sheet="${escapeHtml(c.sheetName)}">
+          <td><strong>${escapeHtml(c.code || "—")}</strong><div class="note">${escapeHtml(c.sheetName)}</div></td>
+          <td><span class="pill ${c.status === "pass" ? "ok" : c.status === "warn" ? "warn" : "bad"}">${c.status.toUpperCase()}</span></td>
+          <td class="${c.fails ? "fail" : ""}">${c.fails}</td>
+          <td class="${c.warns ? "warn" : ""}">${c.warns}</td>
+          <td class="money">${money(c.meta.mtdInclTax)}</td>
+          <td><button class="btn ghost" type="button" data-open="${escapeHtml(c.sheetName)}">Details</button></td>
+        </tr>
+      `).join("");
+
+      body.querySelectorAll("[data-open]").forEach((btn) => {
+        btn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          openClubDetail(btn.getAttribute("data-open"));
+        });
+      });
+      body.querySelectorAll(".club-row").forEach((tr) => {
+        tr.addEventListener("click", () => openClubDetail(tr.getAttribute("data-sheet")));
+      });
+    }
+
+    function openClubDetail(sheetName) {
+      const c = clubResults.find((x) => x.sheetName === sheetName);
+      if (!c) return;
+      expandedClub = sheetName;
+      const section = document.getElementById("sectionFilter").value;
+      let checks = c.checks;
+      if (section !== "all") checks = checks.filter((ch) => ch.section === section);
+      // Prefer showing non-pass first
+      checks = [...checks].sort((a, b) => {
+        const rank = { fail: 0, warn: 1, pass: 2 };
+        return rank[a.status] - rank[b.status];
+      });
+
+      const host = document.getElementById("clubDetailHost");
+      host.innerHTML = `
+        <div class="club-detail">
+          <div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:center">
+            <div>
+              <strong>${escapeHtml(c.sheetName)}</strong>
+              <div class="note">${c.fails} fail · ${c.warns} warn · ${c.checks.filter((x) => x.status === "pass").length} pass</div>
+            </div>
+            <button class="btn ghost" type="button" id="closeDetailBtn">Close</button>
+          </div>
+          <div id="clubDetailChecks" style="margin-top:8px"></div>
+        </div>
+      `;
+      renderCheckLines(checks, document.getElementById("clubDetailChecks"));
+      document.getElementById("closeDetailBtn").onclick = () => {
+        host.innerHTML = "";
+        expandedClub = null;
+      };
+      host.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
+
+    // Tabs
+    document.querySelectorAll(".tab").forEach((tab) => {
+      tab.addEventListener("click", () => {
+        document.querySelectorAll(".tab").forEach((t) => t.classList.remove("active"));
+        tab.classList.add("active");
+        const id = tab.dataset.tab;
+        document.getElementById("tabSummary").classList.toggle("hidden", id !== "summary");
+        document.getElementById("tabClubs").classList.toggle("hidden", id !== "clubs");
+        document.getElementById("tabRollup").classList.toggle("hidden", id !== "rollup");
+      });
+    });
+
+    // Filters
+    ["clubSearch", "statusFilter", "sectionFilter"].forEach((id) => {
+      document.getElementById(id).addEventListener("input", renderClubs);
+      document.getElementById(id).addEventListener("change", renderClubs);
+    });
+    document.getElementById("clearFiltersBtn").addEventListener("click", () => {
+      document.getElementById("clubSearch").value = "";
+      document.getElementById("statusFilter").value = "fail";
+      document.getElementById("sectionFilter").value = "all";
+      document.querySelectorAll(".kpi.clickable").forEach((k) => k.classList.remove("active"));
+      document.getElementById("kpiFail").classList.add("active");
+      renderClubs();
+    });
+
+    document.querySelectorAll(".kpi.clickable").forEach((kpi) => {
+      kpi.addEventListener("click", () => {
+        if (!clubResults.length) return;
+        document.querySelectorAll(".kpi.clickable").forEach((k) => k.classList.remove("active"));
+        kpi.classList.add("active");
+        const st = kpi.getAttribute("data-filter-status");
+        document.getElementById("statusFilter").value = st;
+        document.querySelectorAll(".tab").forEach((t) => t.classList.remove("active"));
+        document.querySelector('.tab[data-tab="clubs"]').classList.add("active");
+        document.getElementById("tabSummary").classList.add("hidden");
+        document.getElementById("tabClubs").classList.remove("hidden");
+        document.getElementById("tabRollup").classList.add("hidden");
+        renderClubs();
+      });
+    });
+
+    exportBtn.addEventListener("click", () => {
+      const rows = [["sheet", "kind", "club", "status", "section", "check", "expected", "actual", "diff", "detail"]];
+      const push = (r) => {
+        for (const c of r.checks) {
+          rows.push([
+            r.sheetName, r.kind, r.code, c.status, c.section, c.name,
+            c.expected, c.actual, c.diff, c.detail,
+          ]);
+        }
+      };
+      if (summaryResult) push(summaryResult);
+      clubResults.forEach(push);
+      const ws = XLSX.utils.aoa_to_sheet(rows);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "DRDR Validation");
+      XLSX.writeFile(wb, `DRDR-validation-${new Date().toISOString().slice(0, 10)}.csv`);
+    });
+  </script>
+</body>
+</html>

@@ -630,17 +630,12 @@
         cards: [
           { id: "eft-allocation", title: "EFT Allocation", desc: "EFT + Royalty Dues Gross / Pre Tax Dues validation, PFAQ expected gaps, and club-level Combined Summary checks." },
           { id: "eft-annual", title: "EFT Allocation Annual", desc: "EFT + Royalty Annual Gross / Pre Tax Annual validation, PFAQ expected gaps, and club-level Combined Summary checks." },
-          { id: "accounting-journal", title: "Accounting Journal Entries", desc: "Accounting Journal Entries report testing module." },
+          { id: "accounting-journal", title: "Accounting Journal Entries", desc: "Journal $0.00 balance check + org out-of-balance files (AJE Adjustment File download)." },
         ],
       },
       "eft-allocation": { embed: "eft-allocation.html?v=20260721a" },
       "eft-annual": { embed: "eft-allocation-annual.html?v=20260720e" },
-      "accounting-journal": {
-        kicker: "EOM REPORTS",
-        title: "Accounting Journal Entries",
-        desc: "Placeholder — Accounting Journal Entries report testing module.",
-        cards: [],
-      },
+      "accounting-journal": { embed: "accounting-journal.html?v=1" },
       "pf-reports": {
         kicker: "PF REPORTS",
         title: "PF reports",

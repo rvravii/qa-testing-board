@@ -90,6 +90,22 @@
       font-size: 0.82rem; color: var(--muted); margin: 8px 0 4px; line-height: 1.45;
     }
     .formula strong { color: var(--text); }
+    .club-detail {
+      margin-top: 14px; border: 1px solid var(--line); border-radius: 12px;
+      background: #0b1324; padding: 14px;
+    }
+    .club-detail .head {
+      display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between;
+      margin-bottom: 10px;
+    }
+    .club-detail .chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0 12px; }
+    .club-detail .chip {
+      background: #111827; border: 1px solid var(--line); border-radius: 10px;
+      padding: 8px 10px; min-width: 120px;
+    }
+    .club-detail .chip .l { color: var(--muted); font-size: 0.7rem; font-weight: 700; }
+    .club-detail .chip .v { font-weight: 800; margin-top: 2px; }
+    .club-detail h3 { margin: 14px 0 6px; font-size: 0.9rem; }
     @media (max-width: 900px) {
       .upload-grid, .kpis { grid-template-columns: 1fr; }
     }
@@ -341,6 +357,7 @@
             <tbody id="clubBody"></tbody>
           </table>
         </div>
+        <div id="clubDetail" class="club-detail hidden"></div>
       </div>
     </div>
   </div>
@@ -923,6 +940,8 @@
       renderDeductions();
       renderDeposits();
       renderClubs();
+      document.getElementById("clubDetail").classList.add("hidden");
+      document.getElementById("clubDetail").innerHTML = "";
       showTab(miss || extra ? "gaps" : "aje");
     }
 
@@ -1028,6 +1047,163 @@
       `).join("");
     }
 
+    function amtFailCount(pair) {
+      if (!pair) return 0;
+      return pair.pcFail + pair.dedFail
+        + pair.deposits.filter((d) => d.status === "fail").length;
+    }
+
+    function issueRows(pair) {
+      if (!pair) return [];
+      const rows = [];
+      for (const r of pair.revenue) {
+        if (!isIssueStatus(r.status)) continue;
+        rows.push({
+          section: "Revenue / Profit Center",
+          name: r.name,
+          drdr: r.drdrSum,
+          aje: r.ajeNet,
+          diff: r.diff,
+          status: r.status,
+          note: r.note || "",
+        });
+      }
+      for (const r of pair.deductions) {
+        if (!isIssueStatus(r.status)) continue;
+        rows.push({
+          section: "Deductions",
+          name: r.name,
+          drdr: r.drdrAbs,
+          aje: r.ajeAmt,
+          diff: r.diff,
+          status: r.status,
+          note: r.note || "",
+        });
+      }
+      for (const r of pair.deposits) {
+        if (!isIssueStatus(r.status)) continue;
+        rows.push({
+          section: "Deposits",
+          name: r.name,
+          drdr: r.drdr,
+          aje: r.aje,
+          diff: r.diff,
+          status: r.status,
+          note: r.note || "",
+        });
+      }
+      return rows;
+    }
+
+    function renderClubDetail(code) {
+      const panel = document.getElementById("clubDetail");
+      const club = result.clubs.find((c) => c.code === code);
+      if (!club) {
+        panel.classList.add("hidden");
+        panel.innerHTML = "";
+        return;
+      }
+      if (!club.pair) {
+        panel.classList.remove("hidden");
+        panel.innerHTML = `
+          <div class="head">
+            <div><strong>${escapeHtml(club.code)}</strong> — ${escapeHtml(club.name)}</div>
+            <button class="btn ghost" type="button" id="clubDetailClose">Close</button>
+          </div>
+          <div class="note">Entire sheet missing in ${escapeHtml(club.missing || "?")}.</div>`;
+        document.getElementById("clubDetailClose").addEventListener("click", () => {
+          panel.classList.add("hidden");
+        });
+        return;
+      }
+      const p = club.pair;
+      const revIssues = p.revenue.filter((r) => isIssueStatus(r.status)).length;
+      const dedIssues = p.deductions.filter((r) => isIssueStatus(r.status)).length;
+      const depIssues = p.deposits.filter((r) => isIssueStatus(r.status)).length;
+      const rows = issueRows(p);
+      const bySection = {
+        revenue: rows.filter((r) => r.section.startsWith("Revenue")).length,
+        deduction: rows.filter((r) => r.section === "Deductions").length,
+        deposit: rows.filter((r) => r.section === "Deposits").length,
+      };
+      panel.classList.remove("hidden");
+      panel.innerHTML = `
+        <div class="head">
+          <div>
+            <strong>${escapeHtml(club.code)}</strong> — ${escapeHtml(club.name)}
+            <div class="note">Fail detail by section (stays on Club-wise — no jump to Missing/Extra)</div>
+          </div>
+          <button class="btn ghost" type="button" id="clubDetailClose">Close</button>
+        </div>
+        <div class="chips">
+          <div class="chip"><div class="l">AJE Debit − Credit</div><div class="v money ${p.aje.balanced ? "ok" : "bad"}">${money(p.aje.diff)}</div></div>
+          <div class="chip"><div class="l">Revenue issues</div><div class="v ${revIssues ? "bad" : "ok"}">${revIssues}</div></div>
+          <div class="chip"><div class="l">Deduction issues</div><div class="v ${dedIssues ? "bad" : "ok"}">${dedIssues}</div></div>
+          <div class="chip"><div class="l">Deposit issues</div><div class="v ${depIssues ? "bad" : "ok"}">${depIssues}</div></div>
+          <div class="chip"><div class="l">Missing in AJE</div><div class="v ${p.missing ? "bad" : "ok"}">${p.missing}</div></div>
+          <div class="chip"><div class="l">Extra in AJE</div><div class="v ${p.extra ? "warn" : "ok"}">${p.extra}</div></div>
+        </div>
+        <div class="note">Sections with fails:
+          Revenue <strong class="${bySection.revenue ? "bad" : "ok"}">${bySection.revenue}</strong> ·
+          Deductions <strong class="${bySection.deduction ? "bad" : "ok"}">${bySection.deduction}</strong> ·
+          Deposits <strong class="${bySection.deposit ? "bad" : "ok"}">${bySection.deposit}</strong>
+        </div>
+        <h3>Failed / gap lines (${rows.length})</h3>
+        <div class="table-wrap" style="max-height:360px">
+          <table>
+            <thead>
+              <tr>
+                <th>Section</th>
+                <th>Record</th>
+                <th>DRDR</th>
+                <th>AJE</th>
+                <th>Diff</th>
+                <th>Status</th>
+                <th>Note</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rows.map((r) => `
+                <tr>
+                  <td>${escapeHtml(r.section)}</td>
+                  <td><strong>${escapeHtml(r.name)}</strong></td>
+                  <td class="money">${money(r.drdr)}</td>
+                  <td class="money">${money(r.aje)}</td>
+                  <td class="money ${r.status === "pass" ? "" : "bad"}">${money(r.diff)}</td>
+                  <td><span class="pill ${pillClass(r.status)}">${pillLabel(r.status)}</span></td>
+                  <td class="note">${escapeHtml(r.note)}</td>
+                </tr>
+              `).join("") || `<tr><td colspan="7" class="note">No line-level issues for this club.</td></tr>`}
+            </tbody>
+          </table>
+        </div>
+        <div class="upload-row" style="margin-top:10px">
+          <button class="btn ghost" type="button" data-jump-section="revenue">Open Revenue tab</button>
+          <button class="btn ghost" type="button" data-jump-section="deductions">Open Deductions tab</button>
+          <button class="btn ghost" type="button" data-jump-section="deposits">Open Deposits tab</button>
+          ${p.missing || p.extra ? `<button class="btn ghost" type="button" data-jump-section="gaps">Open Missing/Extra</button>` : ""}
+        </div>`;
+
+      document.getElementById("clubDetailClose").addEventListener("click", () => {
+        panel.classList.add("hidden");
+      });
+      panel.querySelectorAll("[data-jump-section]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const sec = btn.getAttribute("data-jump-section");
+          document.getElementById("revScope").value = code;
+          document.getElementById("dedScope").value = code;
+          document.getElementById("gapScope").value = code;
+          document.getElementById("revShow").value = "fail";
+          document.getElementById("dedShow").value = "fail";
+          renderRevenue();
+          renderDeductions();
+          renderGaps();
+          showTab(sec);
+        });
+      });
+      panel.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
+
     function renderClubs() {
       const mode = document.getElementById("clubShow").value;
       const q = document.getElementById("clubSearch").value.trim().toLowerCase();
@@ -1043,28 +1219,21 @@
             <td><span class="pill warn">WARN</span></td><td></td></tr>`;
         }
         const p = c.pair;
+        const amts = amtFailCount(p);
         return `<tr>
           <td><strong>${escapeHtml(c.code)}</strong><div class="note">${escapeHtml(c.name)}</div></td>
           <td class="money ${p.aje.balanced ? "ok" : "bad"}">${money(p.aje.diff)}</td>
-          <td class="${p.pcFail ? "bad" : "ok"}">${p.pcFail}</td>
+          <td class="${amts ? "bad" : "ok"}">${amts}</td>
           <td class="${p.missing ? "bad" : "ok"}">${p.missing}</td>
           <td class="${p.extra ? "warn" : "ok"}">${p.extra}</td>
           <td><span class="pill ${c.status === "pass" ? "ok" : "bad"}">${c.status.toUpperCase()}</span></td>
-          <td><button class="btn ghost" type="button" data-open-club="${escapeHtml(c.code)}">Open gaps</button></td>
+          <td><button class="btn ghost" type="button" data-open-club="${escapeHtml(c.code)}">View details</button></td>
         </tr>`;
       }).join("") || `<tr><td colspan="7" class="note">No clubs</td></tr>`;
 
       document.querySelectorAll("[data-open-club]").forEach((btn) => {
         btn.addEventListener("click", () => {
-          const code = btn.getAttribute("data-open-club");
-          document.getElementById("gapScope").value = code;
-          document.getElementById("revScope").value = code;
-          document.getElementById("dedScope").value = code;
-          document.getElementById("gapShow").value = "all";
-          renderGaps();
-          renderRevenue();
-          renderDeductions();
-          showTab("gaps");
+          renderClubDetail(btn.getAttribute("data-open-club"));
         });
       });
     }

@@ -527,14 +527,14 @@
         </button>
 
         <div class="nav-section">Insight Reports</div>
-        <button class="nav-item" data-toggle="insight" type="button">
+        <button class="nav-item open" data-toggle="insight" type="button">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M14 2H7a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" stroke="currentColor" stroke-width="1.7"/><path d="M14 2v6h6M9 13h6M9 17h4" stroke="currentColor" stroke-width="1.7"/></svg>
           Insight Reports
           <span class="spacer"></span>
           <span class="chev">▾</span>
         </button>
         <div class="nav-group" id="group-insight">
-          <button class="nav-child" data-page="insight-reports" type="button">Insight Reports</button>
+          <button class="nav-child" data-page="aje-standard" type="button">Accounting Journal Entries_ standard report</button>
         </div>
 
         <div class="nav-section">Dashboards</div>
@@ -604,9 +604,12 @@
       "insight-reports": {
         kicker: "INSIGHT REPORTS",
         title: "Insight Reports",
-        desc: "Insight report group. More modules will be added as QA scope expands.",
-        cards: [],
+        desc: "Insight report group. Open a child report from the left panel.",
+        cards: [
+          { id: "aje-standard", title: "Accounting Journal Entries_ standard report", desc: "AJE Debit/Credit balance + DRDR section cross-check (club-wise)." },
+        ],
       },
+      "aje-standard": { embed: "aje-standard.html?v=1" },
       dashboards: {
         kicker: "DASHBOARDS",
         title: "Dashboards",
@@ -669,7 +672,7 @@
       if (["drdr", "pf-reports"].includes(page)) {
         document.querySelector('[data-toggle="pf"]').classList.add("active");
       }
-      if (["insight-reports"].includes(page)) {
+      if (["aje-standard", "insight-reports"].includes(page)) {
         document.querySelector('[data-toggle="insight"]').classList.add("active");
       }
     }

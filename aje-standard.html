@@ -1,0 +1,1116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AJE Standard Report — ABC Insights QA</title>
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+  <style>
+    :root {
+      --bg: #0b1220; --panel: #111827; --panel2: #0f172a; --line: #1f2937;
+      --text: #e5e7eb; --muted: #94a3b8; --accent: #38bdf8;
+      --ok: #22c55e; --bad: #ef4444; --warn: #f59e0b;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      background: radial-gradient(1200px 600px at 10% -10%, #1e293b 0%, var(--bg) 55%);
+      color: var(--text);
+    }
+    .wrap { max-width: 1320px; margin: 0 auto; padding: 28px 20px 60px; }
+    h1 { margin: 0 0 6px; font-size: 1.4rem; }
+    .sub { color: var(--muted); margin-bottom: 18px; font-size: 0.9rem; line-height: 1.5; }
+    .badge-local {
+      display: inline-block; margin-left: 8px; padding: 2px 8px; border-radius: 999px;
+      background: #422006; color: #fdba74; font-size: 0.72rem; font-weight: 700; vertical-align: middle;
+    }
+    .card {
+      background: linear-gradient(180deg, var(--panel), var(--panel2));
+      border: 1px solid var(--line); border-radius: 14px; padding: 16px; margin-bottom: 14px;
+    }
+    .upload-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .upload-box { background: #0b1324; border: 1px dashed #334155; border-radius: 12px; padding: 14px; }
+    .upload-box h3 { margin: 0 0 6px; font-size: 0.95rem; }
+    .upload-row { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; margin-top: 10px; }
+    .btn {
+      background: var(--accent); color: #082f49; border: 0; border-radius: 10px;
+      padding: 10px 14px; font-weight: 700; cursor: pointer;
+    }
+    .btn.ghost { background: transparent; color: var(--text); border: 1px solid var(--line); }
+    .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+    .meta, .note { color: var(--muted); font-size: 0.84rem; line-height: 1.45; }
+    .meta { margin-top: 8px; }
+    .kpis { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; margin-top: 12px; }
+    .kpi { background: #0b1324; border: 1px solid var(--line); border-radius: 12px; padding: 12px; }
+    .kpi .l { color: var(--muted); font-size: 0.75rem; font-weight: 600; }
+    .kpi .v { font-size: 1.15rem; font-weight: 800; margin-top: 4px; }
+    .kpi .hint { color: var(--muted); font-size: 0.7rem; margin-top: 6px; line-height: 1.3; }
+    .ok { color: var(--ok); } .bad { color: var(--bad); } .warn { color: var(--warn); }
+    table { width: 100%; border-collapse: collapse; font-size: 0.84rem; }
+    th, td { padding: 8px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+    th { color: var(--muted); font-weight: 600; position: sticky; top: 0; background: #0f172a; }
+    .money { font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .hidden { display: none; }
+    .section-title { margin: 0 0 8px; font-size: 1.02rem; }
+    .pill { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 0.7rem; font-weight: 700; }
+    .pill.ok { background: #052e1a; color: #86efac; }
+    .pill.bad { background: #450a0a; color: #fca5a5; }
+    .pill.warn { background: #422006; color: #fcd34d; }
+    .tabs { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+    .tab {
+      background: #0b1324; border: 1px solid var(--line); color: var(--text);
+      border-radius: 999px; padding: 7px 12px; font-weight: 700; cursor: pointer; font-size: 0.8rem;
+    }
+    .tab.active { border-color: var(--accent); color: var(--accent); }
+    .filters { display: flex; flex-wrap: wrap; gap: 10px; align-items: end; margin: 10px 0; }
+    .field { display: flex; flex-direction: column; gap: 4px; min-width: 130px; }
+    .field label { color: var(--muted); font-size: 0.7rem; font-weight: 700; }
+    .field input, .field select {
+      background: #0b1324; color: var(--text); border: 1px solid var(--line);
+      border-radius: 8px; padding: 8px 10px; font-size: 0.84rem;
+    }
+    .banner {
+      border-radius: 12px; padding: 12px 14px; margin-bottom: 12px; border: 1px solid var(--line);
+      background: #0b1324; font-size: 0.88rem; line-height: 1.45;
+    }
+    .banner.fail { border-color: #7f1d1d; background: rgba(239, 68, 68, 0.08); }
+    .banner.pass { border-color: #14532d; background: rgba(34, 197, 94, 0.08); }
+    .eq { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; font-weight: 700; margin: 10px 0; }
+    .eq span { background: #0b1324; border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; }
+    .sec-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; }
+    .sec-card { background: #0b1324; border: 1px solid var(--line); border-radius: 12px; padding: 12px; }
+    .sec-card.imbalance { border-color: rgba(239, 68, 68, 0.45); }
+    .sec-card .net { font-size: 1.1rem; font-weight: 800; margin-top: 6px; }
+    .table-wrap { overflow: auto; max-height: 540px; margin-top: 8px; border: 1px solid var(--line); border-radius: 10px; }
+    .progress { height: 6px; background: #0b1324; border-radius: 999px; overflow: hidden; margin-top: 10px; }
+    .progress > div { height: 100%; background: var(--accent); width: 0%; }
+    .formula {
+      background: #0b1324; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px;
+      font-size: 0.82rem; color: var(--muted); margin: 8px 0 4px; line-height: 1.45;
+    }
+    .formula strong { color: var(--text); }
+    @media (max-width: 900px) {
+      .upload-grid, .kpis { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Accounting Journal Entries_ standard report</h1>
+    <div class="sub">
+      AJE is built from DRDR. We check: (1) AJE Debit = Credit,
+      (2) each <strong>Profit Center</strong> (ABC Member Billing + Collect at Club) vs AJE revenue credit,
+      (3) each <strong>Deduction</strong> line vs AJE expense,
+      (4) <strong>Total Deposited</strong> vs AJE DEPOSITS debit — All Locations + club-wise.
+    </div>
+
+    <div class="card">
+      <div class="upload-grid">
+        <div class="upload-box">
+          <h3>1. AJE Standard (Debit / Credit)</h3>
+          <div class="note">Double-column Accounting Journal Entries</div>
+          <div class="upload-row"><input type="file" id="ajeInput" accept=".xlsx,.xls" /></div>
+          <div class="meta" id="ajeMeta">Waiting for AJE Excel…</div>
+        </div>
+        <div class="upload-box">
+          <h3>2. DRDR</h3>
+          <div class="note">Daily Revenue &amp; Deposit Reconciliation (same period)</div>
+          <div class="upload-row"><input type="file" id="drdrInput" accept=".xlsx,.xls" /></div>
+          <div class="meta" id="drdrMeta">Waiting for DRDR Excel…</div>
+        </div>
+      </div>
+      <div class="upload-row" style="margin-top:14px">
+        <button class="btn" id="runBtn" type="button" disabled>Run Validation</button>
+        <button class="btn ghost" id="exportBtn" type="button" disabled>Export CSV</button>
+      </div>
+      <div class="progress hidden" id="progressWrap"><div id="progressBar"></div></div>
+      <div class="kpis hidden" id="kpiRow">
+        <div class="kpi"><div class="l">AJE Debit = Credit</div><div class="v" id="kpiBal">—</div><div class="hint">Overall journal</div></div>
+        <div class="kpi"><div class="l">Amount mismatches</div><div class="v" id="kpiPc">—</div><div class="hint">Both sides present, value differs</div></div>
+        <div class="kpi"><div class="l">Missing in AJE</div><div class="v" id="kpiMiss">—</div><div class="hint">In DRDR (parent), not in AJE child</div></div>
+        <div class="kpi"><div class="l">Extra in AJE</div><div class="v" id="kpiExtra">—</div><div class="hint">In AJE child, not in DRDR parent</div></div>
+        <div class="kpi"><div class="l">Clubs with gaps</div><div class="v" id="kpiClubs">—</div><div class="hint">Fail / missing / extra</div></div>
+      </div>
+    </div>
+
+    <div class="card hidden" id="resultsCard">
+      <div id="statusBanner" class="banner"></div>
+      <div class="tabs">
+        <button class="tab active" data-tab="aje" type="button">1. AJE balance</button>
+        <button class="tab" data-tab="gaps" type="button">2. Missing / Extra</button>
+        <button class="tab" data-tab="revenue" type="button">3. Revenue by Profit Center</button>
+        <button class="tab" data-tab="deductions" type="button">4. Deductions</button>
+        <button class="tab" data-tab="deposits" type="button">5. Deposits</button>
+        <button class="tab" data-tab="clubs" type="button">6. Club-wise</button>
+      </div>
+
+      <div id="tabAje">
+        <h2 class="section-title">AJE Debit vs Credit</h2>
+        <div class="eq" id="ajeEq"></div>
+        <div class="sec-grid" id="secCards"></div>
+      </div>
+
+      <div id="tabGaps" class="hidden">
+        <h2 class="section-title">Missing / Extra records (DRDR parent ↔ AJE child)</h2>
+        <div class="formula">
+          <strong>Rule:</strong> DRDR is parent, AJE is child.
+          Every meaningful DRDR line should appear in AJE → if not: <span class="pill bad">MISSING IN AJE</span>.
+          If AJE has a line with no DRDR parent → <span class="pill warn">EXTRA IN AJE</span>.
+        </div>
+        <div class="filters">
+          <div class="field">
+            <label>Scope</label>
+            <select id="gapScope"><option value="all">All Locations</option></select>
+          </div>
+          <div class="field">
+            <label>Show</label>
+            <select id="gapShow">
+              <option value="all">Missing + Extra</option>
+              <option value="missing_aje">Missing in AJE only</option>
+              <option value="extra_aje">Extra in AJE only</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Section</label>
+            <select id="gapSection">
+              <option value="all">All sections</option>
+              <option value="revenue">Revenue / Profit Center</option>
+              <option value="deduction">Deductions</option>
+              <option value="deposit">Deposits</option>
+            </select>
+          </div>
+        </div>
+        <div class="meta" id="gapMeta"></div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Flag</th>
+                <th>Section</th>
+                <th>Record</th>
+                <th>DRDR value</th>
+                <th>AJE value</th>
+                <th>Note</th>
+              </tr>
+            </thead>
+            <tbody id="gapBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div id="tabRevenue" class="hidden">
+        <h2 class="section-title">Revenue by Profit Center → AJE Current Billing Revenue</h2>
+        <div class="formula">
+          <strong>Rule (from DRDR → AJE):</strong>
+          For each Profit Center (e.g. ANNUAL):
+          <strong>DRDR ABC Member Billing MTD + Member Billing Collect at Club MTD</strong>
+          should equal
+          <strong>AJE Credit − Debit</strong> on Current Billing Revenue where ABC Description = that Profit Center
+          (example: 21,972.17 + 784.00 = 22,756.17 → Annual Fees credit).
+        </div>
+        <div class="filters">
+          <div class="field">
+            <label>Scope</label>
+            <select id="revScope"><option value="all">All Locations</option></select>
+          </div>
+          <div class="field">
+            <label>Show</label>
+            <select id="revShow">
+              <option value="fail">Issues (mismatch / missing / extra)</option>
+              <option value="missing">Missing / Extra only</option>
+              <option value="all">All profit centers</option>
+              <option value="matched">Matched only</option>
+            </select>
+          </div>
+          <div class="field" style="flex:1;min-width:160px">
+            <label>Search</label>
+            <input type="search" id="revSearch" placeholder="ANNUAL, DIGX, DUES…" />
+          </div>
+        </div>
+        <div class="meta" id="revMeta"></div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Profit Center / ABC Desc</th>
+                <th>DRDR ABC MTD</th>
+                <th>DRDR Collect at Club</th>
+                <th>DRDR Sum</th>
+                <th>AJE Net (C−D)</th>
+                <th>Diff</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody id="revBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div id="tabDeductions" class="hidden">
+        <h2 class="section-title">DRDR Deductions → AJE Expense</h2>
+        <div class="formula">
+          <strong>Rule:</strong> Each DRDR Deduction line (ABC Member Billing MTD, usually negative)
+          maps to an AJE <strong>Expense</strong> debit with the same ABC Description
+          (e.g. OFFSET - 7000 ROYALTY → Expense 7,819.55).
+          Card brands (AMEX/VISA/MC/DISCOVER) roll up to <em>CREDIT CARD PASS THRU FEES</em>;
+          <em>ABC</em> rolls up to <em>PROCESSING FEES</em>.
+        </div>
+        <div class="filters">
+          <div class="field">
+            <label>Scope</label>
+            <select id="dedScope"><option value="all">All Locations</option></select>
+          </div>
+          <div class="field">
+            <label>Show</label>
+            <select id="dedShow">
+              <option value="fail">Issues (mismatch / missing / extra)</option>
+              <option value="missing">Missing / Extra only</option>
+              <option value="all">All lines</option>
+            </select>
+          </div>
+          <div class="field" style="flex:1;min-width:160px">
+            <label>Search</label>
+            <input type="search" id="dedSearch" placeholder="ROYALTY, PROCESSING…" />
+          </div>
+        </div>
+        <div class="meta" id="dedMeta"></div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Description</th>
+                <th>DRDR (signed)</th>
+                <th>DRDR abs → AJE</th>
+                <th>AJE Expense debit</th>
+                <th>Diff</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody id="dedBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div id="tabDeposits" class="hidden">
+        <h2 class="section-title">DRDR Total Deposited → AJE DEPOSITS</h2>
+        <div class="formula">
+          <strong>Rule:</strong> DRDR <em>Total Deposited</em> (Member Billing)
+          = AJE Debit on Entry <em>Member Billing Deposits</em> / ABC Description <em>DEPOSITS</em>
+          (Draft Deposit cash line).
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Check</th><th>DRDR</th><th>AJE</th><th>Diff</th><th>Status</th></tr>
+            </thead>
+            <tbody id="depBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div id="tabClubs" class="hidden">
+        <h2 class="section-title">Club-wise summary</h2>
+        <div class="filters">
+          <div class="field">
+            <label>Show</label>
+            <select id="clubShow">
+              <option value="fail">Failing only</option>
+              <option value="all">All clubs</option>
+            </select>
+          </div>
+          <div class="field" style="flex:1;min-width:160px">
+            <label>Search</label>
+            <input type="search" id="clubSearch" placeholder="club #" />
+          </div>
+        </div>
+        <div class="meta" id="clubMeta"></div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Club</th>
+                <th>AJE D−C</th>
+                <th>Amt fails</th>
+                <th>Missing in AJE</th>
+                <th>Extra in AJE</th>
+                <th>Status</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="clubBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const TOL = 0.02;
+    const CARD_BRANDS = new Set(["AMEX", "VISA", "MASTERCARD", "DISCOVER"]);
+    const DEDUCTION_ALIASES = {
+      ABC: "PROCESSING FEES",
+    };
+
+    const ajeInput = document.getElementById("ajeInput");
+    const drdrInput = document.getElementById("drdrInput");
+    const runBtn = document.getElementById("runBtn");
+    const exportBtn = document.getElementById("exportBtn");
+    const ajeMeta = document.getElementById("ajeMeta");
+    const drdrMeta = document.getElementById("drdrMeta");
+    const progressWrap = document.getElementById("progressWrap");
+    const progressBar = document.getElementById("progressBar");
+
+    let ajeBuf = null, drdrBuf = null, ajeName = "", drdrName = "", result = null;
+
+    function num(v) {
+      if (v == null || v === "") return null;
+      if (typeof v === "number" && Number.isFinite(v)) return v;
+      if (typeof v === "string") {
+        const t = v.replace(/[$,\s]/g, "");
+        if (!t || t === "-") return null;
+        const n = Number(t);
+        return Number.isFinite(n) ? n : null;
+      }
+      return null;
+    }
+    function near0(v, tol = TOL) { return Math.abs(v == null ? 0 : v) <= tol; }
+    function near(a, b, tol = TOL) { return Math.abs((a || 0) - (b || 0)) <= tol; }
+    function money(v) {
+      if (v == null || !Number.isFinite(v)) return "—";
+      const s = v < 0 ? "-" : "";
+      return s + "$" + Math.abs(v).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+    function blank(v) { return v == null ? "" : String(v).replace(/\s+/g, " ").trim(); }
+    function up(v) { return blank(v).toUpperCase(); }
+    function escapeHtml(s) {
+      return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+    }
+    function setProgress(p) {
+      progressWrap.classList.remove("hidden");
+      progressBar.style.width = Math.max(0, Math.min(100, p)) + "%";
+    }
+    function clubCode(name) {
+      const m = String(name || "").trim().match(/^(\d+)/);
+      return m ? String(Number(m[1])) : "";
+    }
+    function sheetRows(wb, name) {
+      const ws = wb.Sheets[name];
+      if (!ws) return [];
+      return XLSX.utils.sheet_to_json(ws, { header: 1, defval: null, raw: true });
+    }
+    function findRow(rows, pred, from = 0) {
+      for (let i = from; i < rows.length; i++) {
+        const s = blank(rows[i] && rows[i][0]).replace(/\n/g, " ");
+        if (s && pred(s)) return i;
+      }
+      return -1;
+    }
+    function classifySide(ajeVal, drdrVal) {
+      const hasA = ajeVal != null;
+      const hasD = drdrVal != null;
+      if (hasD && !hasA) {
+        return {
+          status: "missing_aje",
+          note: "In DRDR (parent) but missing in AJE (child)",
+        };
+      }
+      if (hasA && !hasD) {
+        return {
+          status: "extra_aje",
+          note: "In AJE (child) but not found in DRDR (parent)",
+        };
+      }
+      if (!hasA && !hasD) {
+        return { status: "warn", note: "Both missing" };
+      }
+      if (near(ajeVal, drdrVal)) return { status: "pass", note: "" };
+      return { status: "fail", note: "Both present — amount mismatch" };
+    }
+
+    function isIssueStatus(st) {
+      return st === "fail" || st === "missing_aje" || st === "extra_aje" || st === "warn";
+    }
+
+    function pillClass(st) {
+      if (st === "pass") return "ok";
+      if (st === "extra_aje" || st === "warn") return "warn";
+      return "bad";
+    }
+
+    function pillLabel(st) {
+      if (st === "missing_aje") return "MISSING IN AJE";
+      if (st === "extra_aje") return "EXTRA IN AJE";
+      return String(st || "").toUpperCase();
+    }
+
+    function parseAjeSheet(rows, sheetName) {
+      let h = -1;
+      for (let i = 0; i < Math.min(rows.length, 25); i++) {
+        const cells = (rows[i] || []).map((c) => blank(c).toLowerCase());
+        if (cells.includes("debit") && cells.includes("credit")) { h = i; break; }
+      }
+      if (h < 0) return null;
+      const cols = {};
+      (rows[h] || []).forEach((hdr, i) => {
+        const k = blank(hdr).toLowerCase();
+        if (k === "source") cols.source = i;
+        else if (k === "location") cols.location = i;
+        else if (k === "gl-code" || k === "gl code") cols.gl = i;
+        else if (k === "account description") cols.account = i;
+        else if (k === "debit") cols.debit = i;
+        else if (k === "credit") cols.credit = i;
+        else if (k === "entry description") cols.entry = i;
+        else if (k === "abc description") cols.abc = i;
+      });
+      if (cols.debit == null || cols.credit == null) return null;
+
+      const bySource = new Map();
+      const revenueByAbc = new Map(); // net credit-debit for Current Billing Revenue
+      const expenseByAbc = new Map();
+      let debit = 0, credit = 0, lines = 0;
+      let memberBillingDeposits = 0;
+      let currentDeposits = 0; // Collect at club cash
+
+      function bump(map, key, d, c) {
+        if (!map.has(key)) map.set(key, { key, debit: 0, credit: 0, lines: 0, diff: 0 });
+        const b = map.get(key);
+        b.debit += d; b.credit += c; b.lines += 1; b.diff = b.debit - b.credit;
+      }
+      function addNet(map, key, net) {
+        map.set(key, (map.get(key) || 0) + net);
+      }
+
+      for (let i = h + 1; i < rows.length; i++) {
+        const r = rows[i] || [];
+        if (num(r[cols.debit]) == null && num(r[cols.credit]) == null) continue;
+        const d = num(r[cols.debit]) || 0;
+        const c = num(r[cols.credit]) || 0;
+        const source = blank(r[cols.source]);
+        const location = blank(r[cols.location]);
+        const account = blank(r[cols.account]);
+        const entry = blank(r[cols.entry]);
+        const abc = blank(r[cols.abc]);
+        const gl = blank(r[cols.gl]);
+        if (!source && !location && !account && !entry && !abc && !gl) continue;
+        if (source && !location && !account && !entry && !gl) continue;
+
+        const src = source || "(blank)";
+        debit += d; credit += c; lines += 1;
+        bump(bySource, src, d, c);
+
+        if (entry === "Current Billing Revenue") {
+          addNet(revenueByAbc, up(abc) || "(BLANK)", c - d);
+        }
+        if (account === "Expense" || entry === "Current Collection Fees") {
+          addNet(expenseByAbc, up(abc) || "(BLANK)", d - c);
+        }
+        if (entry === "Member Billing Deposits" || up(abc) === "DEPOSITS") {
+          memberBillingDeposits += d;
+        }
+        if (
+          entry === "Current Deposits" ||
+          up(abc) === "INCOME MEMBER BILLING COLLECT IN CLUB"
+        ) {
+          currentDeposits += d;
+        }
+      }
+
+      const sections = [...bySource.values()].sort((a, b) => Math.abs(b.diff) - Math.abs(a.diff));
+      return {
+        sheetName, code: clubCode(sheetName),
+        debit, credit, diff: debit - credit, lines,
+        balanced: near0(debit - credit),
+        sections,
+        imbalanced: sections.filter((s) => !near0(s.diff)),
+        revenueByAbc, expenseByAbc, memberBillingDeposits, currentDeposits,
+      };
+    }
+
+    function parseDrdrSheet(rows, sheetName) {
+      const iPc = findRow(rows, (s) => s === "Profit Center" || s.startsWith("Profit Center"));
+      const iTotPc = findRow(rows, (s) => s.startsWith("Total Revenue by Profit Center"));
+      const iDed = findRow(rows, (s) => s === "Deductions");
+      const iTotDed = findRow(rows, (s) => s.startsWith("Total Deductions"));
+      const iDepHdr = findRow(rows, (s) => s.startsWith("Deposited ABC Billing"));
+      const iTotDep = findRow(rows, (s) => s.startsWith("Total Deposited"), iDepHdr >= 0 ? iDepHdr : 0);
+
+      const profitCenters = [];
+      if (iPc >= 0 && iTotPc > iPc) {
+        for (let i = iPc + 1; i < iTotPc; i++) {
+          const name = blank(rows[i][0]).replace(/\n/g, " ");
+          if (!name) continue;
+          const abcMtd = num(rows[i][6]) || 0;
+          const clubMtd = num(rows[i][8]) || 0;
+          profitCenters.push({
+            name,
+            key: up(name),
+            abcMtd,
+            clubMtd,
+            sum: abcMtd + clubMtd,
+          });
+        }
+      }
+
+      const deductions = [];
+      if (iDed >= 0 && iTotDed > iDed) {
+        for (let i = iDed + 1; i < iTotDed; i++) {
+          const name = blank(rows[i][0]).replace(/\n/g, " ");
+          if (!name) continue;
+          // Prefer ABC Member Billing MTD (col 6), fallback incl tax MTD (18)
+          const signed = num(rows[i][6]) != null ? num(rows[i][6]) : (num(rows[i][18]) || 0);
+          deductions.push({ name, key: up(name), signed, abs: Math.abs(signed || 0) });
+        }
+      }
+
+      const totalDepositedMb = iTotDep >= 0 ? num(rows[iTotDep][5]) : null;
+      const iBillClub = findRow(rows, (s) => s.startsWith("Billing Collect at Club"), iDepHdr >= 0 ? iDepHdr : 0);
+      const billingCollectAtClub = iBillClub >= 0 ? num(rows[iBillClub][5]) : null;
+      const totalDeductions = iTotDed >= 0 ? (num(rows[iTotDed][6]) != null ? num(rows[iTotDed][6]) : num(rows[iTotDed][18])) : null;
+
+      return {
+        sheetName, code: clubCode(sheetName),
+        profitCenters, deductions, totalDepositedMb, billingCollectAtClub, totalDeductions,
+      };
+    }
+
+    function buildRevenueMatches(aje, drdr) {
+      const ajeMap = aje.revenueByAbc;
+      const keys = new Set([
+        ...drdr.profitCenters.map((p) => p.key),
+        ...ajeMap.keys(),
+      ]);
+      const rows = [];
+      for (const key of keys) {
+        const pc = drdr.profitCenters.find((p) => p.key === key);
+        const hasAje = ajeMap.has(key);
+        const ajeNet = hasAje ? ajeMap.get(key) : null;
+        const drdrSum = pc ? pc.sum : null;
+        // skip both-zero noise when both sides exist or DRDR zero with no AJE
+        if (near0(ajeNet || 0) && near0(drdrSum || 0)) continue;
+        const side = classifySide(ajeNet, drdrSum);
+        const diff = (ajeNet == null ? 0 : ajeNet) - (drdrSum == null ? 0 : drdrSum);
+        rows.push({
+          section: "revenue",
+          key,
+          name: (pc && pc.name) || key,
+          abcMtd: pc ? pc.abcMtd : null,
+          clubMtd: pc ? pc.clubMtd : null,
+          drdrSum,
+          ajeNet,
+          diff,
+          status: side.status,
+          note: side.note,
+        });
+      }
+      rows.sort((a, b) => {
+        const rank = { missing_aje: 0, extra_aje: 1, fail: 2, warn: 3, pass: 4 };
+        return (rank[a.status] - rank[b.status]) || (Math.abs(b.diff) - Math.abs(a.diff));
+      });
+      return rows;
+    }
+
+    function buildDeductionMatches(aje, drdr) {
+      const rolled = new Map();
+      function addRoll(targetKey, displayName, item) {
+        if (!rolled.has(targetKey)) {
+          rolled.set(targetKey, { key: targetKey, name: displayName, signed: 0, abs: 0, parts: [] });
+        }
+        const b = rolled.get(targetKey);
+        b.signed += item.signed;
+        b.abs += item.abs;
+        b.parts.push(item.name);
+      }
+
+      for (const d of drdr.deductions) {
+        if (CARD_BRANDS.has(d.key)) {
+          addRoll("CREDIT CARD PASS THRU FEES", "CREDIT CARD PASS THRU FEES (card brands)", d);
+        } else if (DEDUCTION_ALIASES[d.key]) {
+          const t = DEDUCTION_ALIASES[d.key];
+          addRoll(t, t + " (from " + d.name + ")", d);
+        } else {
+          addRoll(d.key, d.name, d);
+        }
+      }
+
+      const ajeMap = aje.expenseByAbc;
+      const keys = new Set([...rolled.keys(), ...ajeMap.keys()]);
+      const rows = [];
+      for (const key of keys) {
+        const d = rolled.get(key);
+        const hasAje = ajeMap.has(key);
+        const ajeAmt = hasAje ? ajeMap.get(key) : null;
+        const drdrAbs = d ? d.abs : null;
+        if (near0(ajeAmt || 0) && near0(drdrAbs || 0)) continue;
+        const side = classifySide(ajeAmt, drdrAbs);
+        const diff = (ajeAmt == null ? 0 : ajeAmt) - (drdrAbs == null ? 0 : drdrAbs);
+        const rollNote = d && d.parts.length > 1 ? ("Rolled: " + d.parts.join(", ")) : "";
+        rows.push({
+          section: "deduction",
+          key,
+          name: (d && d.name) || key,
+          signed: d ? d.signed : null,
+          drdrAbs,
+          ajeAmt,
+          diff,
+          status: side.status,
+          note: [side.note, rollNote].filter(Boolean).join(" · "),
+        });
+      }
+      rows.sort((a, b) => {
+        const rank = { missing_aje: 0, extra_aje: 1, fail: 2, warn: 3, pass: 4 };
+        return (rank[a.status] - rank[b.status]) || (Math.abs(b.diff) - Math.abs(a.diff));
+      });
+      return rows;
+    }
+
+    function depositPresence(ajeAmt, drdrAmt) {
+      const ajeHas = !near0(ajeAmt || 0);
+      const drdrHas = drdrAmt != null && !near0(drdrAmt);
+      const diff = (ajeAmt || 0) - (drdrAmt == null ? 0 : drdrAmt);
+      if (drdrHas && !ajeHas) {
+        return {
+          status: "missing_aje",
+          note: "In DRDR (parent) but missing in AJE (child)",
+          diff,
+        };
+      }
+      if (ajeHas && drdrAmt == null) {
+        return {
+          status: "extra_aje",
+          note: "In AJE (child) but not found in DRDR (parent)",
+          diff,
+        };
+      }
+      if (ajeHas && drdrHas) {
+        if (near(ajeAmt, drdrAmt)) return { status: "pass", note: "", diff };
+        return { status: "fail", note: "Both present — amount mismatch", diff };
+      }
+      return { status: "pass", note: "", diff: 0 };
+    }
+
+    function buildDepositChecks(aje, drdr) {
+      const mb = depositPresence(aje.memberBillingDeposits, drdr.totalDepositedMb);
+      const deposits = [{
+        section: "deposit",
+        key: "TOTAL_DEPOSITED",
+        name: "Total Deposited ↔ Member Billing Deposits / DEPOSITS",
+        drdr: drdr.totalDepositedMb,
+        aje: aje.memberBillingDeposits,
+        diff: mb.diff,
+        status: mb.status,
+        note: mb.note,
+      }];
+
+      const billAbs = drdr.billingCollectAtClub == null ? null : Math.abs(drdr.billingCollectAtClub);
+      const club = depositPresence(aje.currentDeposits, billAbs);
+      if (!near0(aje.currentDeposits || 0) || (billAbs != null && !near0(billAbs))) {
+        deposits.push({
+          section: "deposit",
+          key: "COLLECT_AT_CLUB",
+          name: "Billing Collect at Club ↔ Current Deposits / INCOME MEMBER BILLING COLLECT IN CLUB",
+          drdr: billAbs,
+          aje: aje.currentDeposits,
+          diff: club.diff,
+          status: club.status,
+          note: club.note,
+        });
+      }
+      return deposits;
+    }
+
+    function summarizeIssues(rows) {
+      return {
+        fail: rows.filter((r) => r.status === "fail").length,
+        missing: rows.filter((r) => r.status === "missing_aje").length,
+        extra: rows.filter((r) => r.status === "extra_aje").length,
+        issues: rows.filter((r) => isIssueStatus(r.status)).length,
+      };
+    }
+
+    function buildPair(aje, drdr) {
+      const revenue = buildRevenueMatches(aje, drdr);
+      const deductions = buildDeductionMatches(aje, drdr);
+      const deposits = buildDepositChecks(aje, drdr);
+      const revS = summarizeIssues(revenue);
+      const dedS = summarizeIssues(deductions);
+      const depS = summarizeIssues(deposits);
+      const gaps = [
+        ...revenue.filter((r) => r.status === "missing_aje" || r.status === "extra_aje"),
+        ...deductions.filter((r) => r.status === "missing_aje" || r.status === "extra_aje"),
+        ...deposits.filter((r) => r.status === "missing_aje" || r.status === "extra_aje"),
+      ];
+      const status = (!aje.balanced || revS.issues || dedS.issues || depS.issues) ? "fail" : "pass";
+      return {
+        aje, drdr, revenue, deductions, deposits, gaps,
+        pcFail: revS.fail, dedFail: dedS.fail,
+        missing: revS.missing + dedS.missing + depS.missing,
+        extra: revS.extra + dedS.extra + depS.extra,
+        // keep deposit shortcut for club table
+        deposit: deposits[0],
+        status,
+      };
+    }
+
+    function analyzeWorkbooks(ajeWb, drdrWb) {
+      const ajeAllName = ajeWb.SheetNames.find((n) => /^all locations$/i.test(n.trim())) || ajeWb.SheetNames[0];
+      const drdrAllName = drdrWb.SheetNames.find((n) => /^all locations$/i.test(n.trim())) || drdrWb.SheetNames[0];
+      const ajeAll = parseAjeSheet(sheetRows(ajeWb, ajeAllName), ajeAllName);
+      if (!ajeAll) throw new Error("AJE Debit/Credit header not found (need Standard / Double Column export)");
+      const drdrAll = parseDrdrSheet(sheetRows(drdrWb, drdrAllName), drdrAllName);
+      const all = buildPair(ajeAll, drdrAll);
+
+      const ajeClubs = {};
+      for (const name of ajeWb.SheetNames) {
+        if (!/^\d+/.test(name.trim())) continue;
+        const p = parseAjeSheet(sheetRows(ajeWb, name), name);
+        if (p) ajeClubs[p.code] = p;
+      }
+      const drdrClubs = {};
+      for (const name of drdrWb.SheetNames) {
+        if (!/^\d+/.test(name.trim())) continue;
+        drdrClubs[clubCode(name)] = parseDrdrSheet(sheetRows(drdrWb, name), name);
+      }
+      const codes = [...new Set([...Object.keys(ajeClubs), ...Object.keys(drdrClubs)])]
+        .sort((a, b) => Number(a) - Number(b));
+
+      const clubs = codes.map((code) => {
+        const a = ajeClubs[code];
+        const d = drdrClubs[code];
+        if (!a || !d) {
+          return {
+            code,
+            name: (a && a.sheetName) || (d && d.sheetName) || code,
+            pair: null,
+            status: "warn",
+            missing: !a ? "AJE" : "DRDR",
+          };
+        }
+        const pair = buildPair(a, d);
+        return { code, name: a.sheetName, pair, status: pair.status, missing: null };
+      });
+
+      return { all, clubs, ajeAllName, drdrAllName };
+    }
+
+    function updateRunEnabled() { runBtn.disabled = !(ajeBuf && drdrBuf); }
+
+    ajeInput.addEventListener("change", async () => {
+      const f = ajeInput.files && ajeInput.files[0];
+      ajeBuf = null; ajeName = "";
+      if (!f) { ajeMeta.textContent = "Waiting for AJE Excel…"; updateRunEnabled(); return; }
+      ajeName = f.name;
+      try {
+        ajeBuf = await f.arrayBuffer();
+        ajeMeta.textContent = "Ready: " + f.name;
+      } catch (e) { ajeMeta.textContent = "Failed: " + (e.message || e); }
+      updateRunEnabled();
+    });
+    drdrInput.addEventListener("change", async () => {
+      const f = drdrInput.files && drdrInput.files[0];
+      drdrBuf = null; drdrName = "";
+      if (!f) { drdrMeta.textContent = "Waiting for DRDR Excel…"; updateRunEnabled(); return; }
+      drdrName = f.name;
+      try {
+        drdrBuf = await f.arrayBuffer();
+        drdrMeta.textContent = "Ready: " + f.name;
+      } catch (e) { drdrMeta.textContent = "Failed: " + (e.message || e); }
+      updateRunEnabled();
+    });
+
+    runBtn.addEventListener("click", async () => {
+      if (!ajeBuf || !drdrBuf) return;
+      if (typeof XLSX === "undefined") { alert("SheetJS failed to load"); return; }
+      runBtn.disabled = true; exportBtn.disabled = true;
+      document.getElementById("resultsCard").classList.add("hidden");
+      setProgress(10);
+      try {
+        const ajeWb = XLSX.read(ajeBuf, { type: "array", cellDates: true });
+        setProgress(40);
+        const drdrWb = XLSX.read(drdrBuf, { type: "array", cellDates: true });
+        setProgress(70);
+        await new Promise((r) => setTimeout(r, 0));
+        result = analyzeWorkbooks(ajeWb, drdrWb);
+        result.ajeName = ajeName; result.drdrName = drdrName;
+        setProgress(100);
+        fillScopeSelects();
+        renderAll();
+        ajeMeta.textContent = "Done: " + ajeName;
+        drdrMeta.textContent = "Done: " + drdrName;
+        exportBtn.disabled = false;
+      } catch (e) {
+        console.error(e);
+        ajeMeta.textContent = "Validation failed: " + (e.message || e);
+        alert("Validation failed:\n" + (e.message || e));
+      } finally {
+        runBtn.disabled = !(ajeBuf && drdrBuf);
+        setTimeout(() => progressWrap.classList.add("hidden"), 400);
+      }
+    });
+
+    function fillScopeSelects() {
+      const opts = [`<option value="all">All Locations</option>`]
+        .concat(result.clubs.map((c) => `<option value="${escapeHtml(c.code)}">${escapeHtml(c.code)} — ${escapeHtml(c.name)}</option>`))
+        .join("");
+      document.getElementById("revScope").innerHTML = opts;
+      document.getElementById("dedScope").innerHTML = opts;
+      document.getElementById("gapScope").innerHTML = opts;
+    }
+
+    function pairForScope(scope) {
+      if (scope === "all") return result.all;
+      const club = result.clubs.find((c) => c.code === scope);
+      return club && club.pair ? club.pair : null;
+    }
+
+    function showTab(id) {
+      document.querySelectorAll(".tab").forEach((t) => t.classList.toggle("active", t.dataset.tab === id));
+      ["aje", "gaps", "revenue", "deductions", "deposits", "clubs"].forEach((k) => {
+        const el = document.getElementById("tab" + k.charAt(0).toUpperCase() + k.slice(1));
+        if (el) el.classList.toggle("hidden", id !== k);
+      });
+    }
+
+    function renderAll() {
+      document.getElementById("resultsCard").classList.remove("hidden");
+      document.getElementById("kpiRow").classList.remove("hidden");
+      const a = result.all.aje;
+      const miss = result.all.missing;
+      const extra = result.all.extra;
+      const amtFail = result.all.pcFail + result.all.dedFail
+        + result.all.deposits.filter((d) => d.status === "fail").length;
+      const clubFail = result.clubs.filter((c) => c.status === "fail").length;
+
+      document.getElementById("kpiBal").textContent = a.balanced ? "PASS" : "FAIL";
+      document.getElementById("kpiBal").className = "v " + (a.balanced ? "ok" : "bad");
+      document.getElementById("kpiPc").textContent = String(amtFail);
+      document.getElementById("kpiPc").className = "v " + (amtFail ? "bad" : "ok");
+      document.getElementById("kpiMiss").textContent = String(miss);
+      document.getElementById("kpiMiss").className = "v " + (miss ? "bad" : "ok");
+      document.getElementById("kpiExtra").textContent = String(extra);
+      document.getElementById("kpiExtra").className = "v " + (extra ? "warn" : "ok");
+      document.getElementById("kpiClubs").textContent = clubFail + " / " + result.clubs.length;
+
+      const banner = document.getElementById("statusBanner");
+      if (a.balanced && !amtFail && !miss && !extra) {
+        banner.className = "banner pass";
+        banner.innerHTML = `<span class="pill ok">PASS</span> AJE balanced; no missing/extra records vs DRDR parent.`;
+      } else {
+        banner.className = "banner fail";
+        banner.innerHTML = `<span class="pill bad">REVIEW</span>
+          Missing in AJE (parent→child gap): <strong class="bad">${miss}</strong> ·
+          Extra in AJE (no DRDR parent): <strong class="warn">${extra}</strong> ·
+          Amount mismatches: <strong>${amtFail}</strong> ·
+          AJE imbalance <strong class="bad">${money(a.diff)}</strong>.
+          Open <em>Missing / Extra</em> tab first.`;
+      }
+
+      document.getElementById("ajeEq").innerHTML = `
+        <span>Debit ${money(a.debit)}</span><span style="border:0;background:transparent;color:var(--muted)">−</span>
+        <span>Credit ${money(a.credit)}</span><span style="border:0;background:transparent;color:var(--muted)">=</span>
+        <span class="${a.balanced ? "ok" : "bad"}">${money(a.diff)}</span>`;
+      document.getElementById("secCards").innerHTML = a.sections.map((s) => {
+        const ok = near0(s.diff);
+        return `<div class="sec-card ${ok ? "" : "imbalance"}">
+          <div><strong>${escapeHtml(s.key)}</strong> ${ok ? '<span class="pill ok">OK</span>' : '<span class="pill bad">DIFF</span>'}</div>
+          <div class="net ${ok ? "ok" : "bad"}">${money(s.diff)}</div>
+          <div class="note">D ${money(s.debit)} · C ${money(s.credit)}</div>
+        </div>`;
+      }).join("");
+
+      renderGaps();
+      renderRevenue();
+      renderDeductions();
+      renderDeposits();
+      renderClubs();
+      showTab(miss || extra ? "gaps" : "aje");
+    }
+
+    function renderGaps() {
+      const pair = pairForScope(document.getElementById("gapScope").value);
+      if (!pair) {
+        document.getElementById("gapBody").innerHTML = `<tr><td colspan="6" class="note">No data</td></tr>`;
+        return;
+      }
+      const mode = document.getElementById("gapShow").value;
+      const section = document.getElementById("gapSection").value;
+      let rows = pair.gaps.slice();
+      if (mode === "missing_aje") rows = rows.filter((r) => r.status === "missing_aje");
+      if (mode === "extra_aje") rows = rows.filter((r) => r.status === "extra_aje");
+      if (section !== "all") rows = rows.filter((r) => r.section === section);
+      document.getElementById("gapMeta").textContent =
+        `Showing ${rows.length} gap(s) · missing in AJE ${pair.missing} · extra in AJE ${pair.extra}`;
+      document.getElementById("gapBody").innerHTML = rows.map((r) => `
+        <tr>
+          <td><span class="pill ${pillClass(r.status)}">${pillLabel(r.status)}</span></td>
+          <td>${escapeHtml(r.section)}</td>
+          <td><strong>${escapeHtml(r.name)}</strong></td>
+          <td class="money">${money(r.drdrSum != null ? r.drdrSum : (r.drdrAbs != null ? r.drdrAbs : r.drdr))}</td>
+          <td class="money">${money(r.ajeNet != null ? r.ajeNet : (r.ajeAmt != null ? r.ajeAmt : r.aje))}</td>
+          <td class="note">${escapeHtml(r.note || "")}</td>
+        </tr>
+      `).join("") || `<tr><td colspan="6" class="note">No missing/extra records for this filter — good.</td></tr>`;
+    }
+
+    function renderRevenue() {
+      const pair = pairForScope(document.getElementById("revScope").value);
+      if (!pair) {
+        document.getElementById("revBody").innerHTML = `<tr><td colspan="7" class="note">No data for scope</td></tr>`;
+        return;
+      }
+      const mode = document.getElementById("revShow").value;
+      const q = document.getElementById("revSearch").value.trim().toLowerCase();
+      let rows = pair.revenue.slice();
+      if (mode === "fail") rows = rows.filter((r) => isIssueStatus(r.status));
+      if (mode === "missing") rows = rows.filter((r) => r.status === "missing_aje" || r.status === "extra_aje");
+      if (mode === "matched") rows = rows.filter((r) => r.status === "pass");
+      if (q) rows = rows.filter((r) => r.name.toLowerCase().includes(q) || r.key.toLowerCase().includes(q));
+      document.getElementById("revMeta").textContent =
+        `${rows.length} row(s) · mismatches ${pair.pcFail} · missing ${pair.revenue.filter((r)=>r.status==="missing_aje").length} · extra ${pair.revenue.filter((r)=>r.status==="extra_aje").length}`;
+      document.getElementById("revBody").innerHTML = rows.map((r) => `
+        <tr>
+          <td><strong>${escapeHtml(r.name)}</strong>${r.note ? `<div class="note">${escapeHtml(r.note)}</div>` : ""}</td>
+          <td class="money">${money(r.abcMtd)}</td>
+          <td class="money">${money(r.clubMtd)}</td>
+          <td class="money">${money(r.drdrSum)}</td>
+          <td class="money">${money(r.ajeNet)}</td>
+          <td class="money ${r.status === "pass" ? "" : "bad"}">${money(r.diff)}</td>
+          <td><span class="pill ${pillClass(r.status)}">${pillLabel(r.status)}</span></td>
+        </tr>
+      `).join("") || `<tr><td colspan="7" class="note">No rows</td></tr>`;
+    }
+
+    function renderDeductions() {
+      const pair = pairForScope(document.getElementById("dedScope").value);
+      if (!pair) {
+        document.getElementById("dedBody").innerHTML = `<tr><td colspan="6" class="note">No data for scope</td></tr>`;
+        return;
+      }
+      const mode = document.getElementById("dedShow").value;
+      const q = document.getElementById("dedSearch").value.trim().toLowerCase();
+      let rows = pair.deductions.slice();
+      if (mode === "fail") rows = rows.filter((r) => isIssueStatus(r.status));
+      if (mode === "missing") rows = rows.filter((r) => r.status === "missing_aje" || r.status === "extra_aje");
+      if (q) rows = rows.filter((r) => r.name.toLowerCase().includes(q) || r.key.toLowerCase().includes(q));
+      document.getElementById("dedMeta").textContent =
+        `${rows.length} row(s) · mismatches ${pair.dedFail} · missing ${pair.deductions.filter((r)=>r.status==="missing_aje").length} · extra ${pair.deductions.filter((r)=>r.status==="extra_aje").length}`;
+      document.getElementById("dedBody").innerHTML = rows.map((r) => `
+        <tr>
+          <td><strong>${escapeHtml(r.name)}</strong>${r.note ? `<div class="note">${escapeHtml(r.note)}</div>` : ""}</td>
+          <td class="money">${money(r.signed)}</td>
+          <td class="money">${money(r.drdrAbs)}</td>
+          <td class="money">${money(r.ajeAmt)}</td>
+          <td class="money ${r.status === "pass" ? "" : "bad"}">${money(r.diff)}</td>
+          <td><span class="pill ${pillClass(r.status)}">${pillLabel(r.status)}</span></td>
+        </tr>
+      `).join("") || `<tr><td colspan="6" class="note">No rows</td></tr>`;
+    }
+
+    function renderDeposits() {
+      const rows = [];
+      for (const d of result.all.deposits) {
+        rows.push({ scope: "All Locations", ...d });
+      }
+      for (const c of result.clubs) {
+        if (!c.pair) continue;
+        for (const d of c.pair.deposits) {
+          rows.push({ scope: c.code + " " + c.name, ...d });
+        }
+      }
+      document.getElementById("depBody").innerHTML = rows.map((r) => `
+        <tr>
+          <td><div>${escapeHtml(r.scope)}</div><div class="note">${escapeHtml(r.name)}</div></td>
+          <td class="money">${money(r.drdr)}</td>
+          <td class="money">${money(r.aje)}</td>
+          <td class="money ${r.status === "pass" ? "" : "bad"}">${money(r.diff)}</td>
+          <td><span class="pill ${pillClass(r.status)}">${pillLabel(r.status)}</span>${r.note ? `<div class="note">${escapeHtml(r.note)}</div>` : ""}</td>
+        </tr>
+      `).join("");
+    }
+
+    function renderClubs() {
+      const mode = document.getElementById("clubShow").value;
+      const q = document.getElementById("clubSearch").value.trim().toLowerCase();
+      let list = result.clubs.slice();
+      if (mode === "fail") list = list.filter((c) => c.status === "fail");
+      if (q) list = list.filter((c) => `${c.code} ${c.name}`.toLowerCase().includes(q));
+      document.getElementById("clubMeta").textContent = `Showing ${list.length} of ${result.clubs.length}`;
+      document.getElementById("clubBody").innerHTML = list.map((c) => {
+        if (!c.pair) {
+          return `<tr>
+            <td><strong>${escapeHtml(c.code)}</strong><div class="note">${escapeHtml(c.name)}</div></td>
+            <td colspan="4" class="note">Missing entire sheet in ${escapeHtml(c.missing || "?")}</td>
+            <td><span class="pill warn">WARN</span></td><td></td></tr>`;
+        }
+        const p = c.pair;
+        return `<tr>
+          <td><strong>${escapeHtml(c.code)}</strong><div class="note">${escapeHtml(c.name)}</div></td>
+          <td class="money ${p.aje.balanced ? "ok" : "bad"}">${money(p.aje.diff)}</td>
+          <td class="${p.pcFail ? "bad" : "ok"}">${p.pcFail}</td>
+          <td class="${p.missing ? "bad" : "ok"}">${p.missing}</td>
+          <td class="${p.extra ? "warn" : "ok"}">${p.extra}</td>
+          <td><span class="pill ${c.status === "pass" ? "ok" : "bad"}">${c.status.toUpperCase()}</span></td>
+          <td><button class="btn ghost" type="button" data-open-club="${escapeHtml(c.code)}">Open gaps</button></td>
+        </tr>`;
+      }).join("") || `<tr><td colspan="7" class="note">No clubs</td></tr>`;
+
+      document.querySelectorAll("[data-open-club]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const code = btn.getAttribute("data-open-club");
+          document.getElementById("gapScope").value = code;
+          document.getElementById("revScope").value = code;
+          document.getElementById("dedScope").value = code;
+          document.getElementById("gapShow").value = "all";
+          renderGaps();
+          renderRevenue();
+          renderDeductions();
+          showTab("gaps");
+        });
+      });
+    }
+
+    document.querySelectorAll(".tab").forEach((t) => t.addEventListener("click", () => showTab(t.dataset.tab)));
+    ["gapScope", "gapShow", "gapSection"].forEach((id) => {
+      document.getElementById(id).addEventListener("change", renderGaps);
+    });
+    ["revScope", "revShow", "revSearch"].forEach((id) => {
+      document.getElementById(id).addEventListener("input", renderRevenue);
+      document.getElementById(id).addEventListener("change", renderRevenue);
+    });
+    ["dedScope", "dedShow", "dedSearch"].forEach((id) => {
+      document.getElementById(id).addEventListener("input", renderDeductions);
+      document.getElementById(id).addEventListener("change", renderDeductions);
+    });
+    document.getElementById("clubShow").addEventListener("change", renderClubs);
+    document.getElementById("clubSearch").addEventListener("input", renderClubs);
+
+    exportBtn.addEventListener("click", () => {
+      if (!result) return;
+      const rows = [["level", "scope", "item", "drdr_abc", "drdr_club", "drdr", "aje", "diff", "status", "note"]];
+      rows.push(["aje_balance", "All Locations", "Debit-Credit", "", "", result.all.aje.credit, result.all.aje.debit, result.all.aje.diff, result.all.aje.balanced ? "pass" : "fail", ""]);
+      function pushPair(scope, pair) {
+        for (const r of pair.revenue) {
+          rows.push(["revenue_pc", scope, r.name, r.abcMtd, r.clubMtd, r.drdrSum, r.ajeNet, r.diff, r.status, r.note || ""]);
+        }
+        for (const r of pair.deductions) {
+          rows.push(["deduction", scope, r.name, "", "", r.drdrAbs, r.ajeAmt, r.diff, r.status, r.note || ""]);
+        }
+        for (const r of pair.deposits) {
+          rows.push(["deposit", scope, r.name, "", "", r.drdr, r.aje, r.diff, r.status, r.note || ""]);
+        }
+        for (const r of pair.gaps) {
+          const drdr = r.drdrSum != null ? r.drdrSum : (r.drdrAbs != null ? r.drdrAbs : r.drdr);
+          const aje = r.ajeNet != null ? r.ajeNet : (r.ajeAmt != null ? r.ajeAmt : r.aje);
+          rows.push(["gap_" + r.section, scope, r.name, "", "", drdr, aje, r.diff, r.status, r.note || ""]);
+        }
+      }
+      pushPair("All Locations", result.all);
+      for (const c of result.clubs) if (c.pair) pushPair(c.code, c.pair);
+      const ws = XLSX.utils.aoa_to_sheet(rows);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "AJE vs DRDR");
+      XLSX.writeFile(wb, `aje-standard-detail-${new Date().toISOString().slice(0, 10)}.csv`);
+    });
+  </script>
+</body>
+</html>

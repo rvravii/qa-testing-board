@@ -1,0 +1,976 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Past Due Member Detail — ABC Insights QA</title>
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+  <style>
+    :root {
+      --bg: #0b1220; --panel: #111827; --panel2: #0f172a; --line: #1f2937;
+      --text: #e5e7eb; --muted: #94a3b8; --accent: #38bdf8;
+      --ok: #22c55e; --bad: #ef4444; --warn: #f59e0b;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      background: radial-gradient(1200px 600px at 10% -10%, #1e293b 0%, var(--bg) 55%);
+      color: var(--text);
+    }
+    .wrap { max-width: 1320px; margin: 0 auto; padding: 28px 20px 60px; }
+    h1 { margin: 0 0 6px; font-size: 1.4rem; }
+    .sub { color: var(--muted); margin-bottom: 18px; font-size: 0.9rem; line-height: 1.5; }
+    .badge-local {
+      display: inline-block; margin-left: 8px; padding: 2px 8px; border-radius: 999px;
+      background: #422006; color: #fdba74; font-size: 0.72rem; font-weight: 700; vertical-align: middle;
+    }
+    .card {
+      background: linear-gradient(180deg, var(--panel), var(--panel2));
+      border: 1px solid var(--line); border-radius: 14px; padding: 16px; margin-bottom: 14px;
+    }
+    .upload-row { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+    .btn {
+      background: var(--accent); color: #082f49; border: 0; border-radius: 10px;
+      padding: 10px 14px; font-weight: 700; cursor: pointer;
+    }
+    .btn.ghost { background: transparent; color: var(--text); border: 1px solid var(--line); }
+    .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+    .meta, .note { color: var(--muted); font-size: 0.84rem; line-height: 1.45; }
+    .meta { margin-top: 8px; }
+    .kpis { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; margin-top: 12px; }
+    .kpi { background: #0b1324; border: 1px solid var(--line); border-radius: 12px; padding: 12px; }
+    .kpi .l { color: var(--muted); font-size: 0.75rem; font-weight: 600; }
+    .kpi .v { font-size: 1.15rem; font-weight: 800; margin-top: 4px; }
+    .kpi .hint { color: var(--muted); font-size: 0.7rem; margin-top: 6px; line-height: 1.3; }
+    .ok { color: var(--ok); } .bad { color: var(--bad); } .warn { color: var(--warn); }
+    table { width: 100%; border-collapse: collapse; font-size: 0.84rem; }
+    th, td { padding: 8px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+    th { color: var(--muted); font-weight: 600; position: sticky; top: 0; background: #0f172a; }
+    .money { font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .hidden { display: none; }
+    .section-title { margin: 0 0 8px; font-size: 1.02rem; }
+    .pill { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 0.7rem; font-weight: 700; }
+    .pill.ok { background: #052e1a; color: #86efac; }
+    .pill.bad { background: #450a0a; color: #fca5a5; }
+    .pill.warn { background: #422006; color: #fcd34d; }
+    .tabs { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+    .tab {
+      background: #0b1324; border: 1px solid var(--line); color: var(--text);
+      border-radius: 999px; padding: 7px 12px; font-weight: 700; cursor: pointer; font-size: 0.8rem;
+    }
+    .tab.active { border-color: var(--accent); color: var(--accent); }
+    .filters { display: flex; flex-wrap: wrap; gap: 10px; align-items: end; margin: 10px 0; }
+    .field { display: flex; flex-direction: column; gap: 4px; min-width: 130px; }
+    .field label { color: var(--muted); font-size: 0.7rem; font-weight: 700; }
+    .field input, .field select {
+      background: #0b1324; color: var(--text); border: 1px solid var(--line);
+      border-radius: 8px; padding: 8px 10px; font-size: 0.84rem;
+    }
+    .banner {
+      border-radius: 12px; padding: 12px 14px; margin-bottom: 12px; border: 1px solid var(--line);
+      background: #0b1324; font-size: 0.88rem; line-height: 1.45;
+    }
+    .banner.fail { border-color: #7f1d1d; background: rgba(239, 68, 68, 0.08); }
+    .banner.pass { border-color: #14532d; background: rgba(34, 197, 94, 0.08); }
+    .formula {
+      background: #0b1324; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px;
+      font-size: 0.82rem; color: var(--muted); margin: 8px 0 4px; line-height: 1.45;
+    }
+    .formula strong { color: var(--text); }
+    .table-wrap { overflow: auto; max-height: 540px; margin-top: 8px; border: 1px solid var(--line); border-radius: 10px; }
+    .progress { height: 6px; background: #0b1324; border-radius: 999px; overflow: hidden; margin-top: 10px; }
+    .progress > div { height: 100%; background: var(--accent); width: 0%; }
+    .club-detail {
+      margin-top: 14px; border: 1px solid var(--line); border-radius: 12px;
+      background: #0b1324; padding: 14px;
+    }
+    .club-detail .head {
+      display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between;
+      margin-bottom: 10px;
+    }
+    @media (max-width: 900px) { .kpis { grid-template-columns: 1fr 1fr; } }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Past Due Member Detail</h1>
+    <div class="sub">
+      Agreement-level duplicate check for Past Due Member Detail.
+      Same agreement with different Profit Centers is <strong>not</strong> a duplicate —
+      duplicate only when <strong>Agreement # + Due Date + Profit Center + Past Due Amount</strong> match
+      (or the full row matches).
+    </div>
+
+    <div class="card">
+      <div class="upload-row">
+        <input type="file" id="fileInput" accept=".xlsx,.xls" />
+        <button class="btn" id="runBtn" type="button" disabled>Run Validation</button>
+        <button class="btn ghost" id="exportBtn" type="button" disabled>Export duplicates (upload format)</button>
+      </div>
+      <div class="meta" id="fileMeta">Upload Past Due Member Detail (.xlsx). Single-club or multi-club / multi-sheet files supported.</div>
+      <div class="progress hidden" id="progressWrap"><div id="progressBar"></div></div>
+    </div>
+
+    <div class="kpis hidden" id="kpiRow">
+      <div class="kpi"><div class="l">Total rows</div><div class="v" id="kpiRows">—</div><div class="hint">Detail lines parsed</div></div>
+      <div class="kpi"><div class="l">Unique agreements</div><div class="v" id="kpiAgr">—</div><div class="hint">Distinct Agreement #</div></div>
+      <div class="kpi"><div class="l">Clubs</div><div class="v" id="kpiClubs">—</div><div class="hint">Club sheets / codes</div></div>
+      <div class="kpi"><div class="l">Duplicate groups</div><div class="v" id="kpiDupGroups">—</div><div class="hint">Same agr+due+PC+amt</div></div>
+      <div class="kpi"><div class="l">Extra duplicate rows</div><div class="v" id="kpiDupExtra">—</div><div class="hint">Rows beyond the first keep</div></div>
+    </div>
+
+    <div class="card hidden" id="resultsCard">
+      <div id="statusBanner" class="banner"></div>
+      <div class="tabs">
+        <button class="tab active" data-tab="summary" type="button">1. Summary</button>
+        <button class="tab" data-tab="dups" type="button">2. Duplicates</button>
+        <button class="tab" data-tab="clubs" type="button">3. Club-wise</button>
+      </div>
+
+      <div id="tabSummary">
+        <h2 class="section-title">Summary</h2>
+        <div class="formula">
+          <strong>Duplicate key:</strong> Agreement # + Due Date + Profit Center + Past Due Amount.
+          Different profit centers on the same agreement are expected (e.g. ANNUAL + LATE FEE + DUESWTAN) and are not flagged.
+        </div>
+        <div class="meta" id="summaryMeta"></div>
+        <div class="table-wrap" style="max-height:280px">
+          <table>
+            <thead>
+              <tr>
+                <th>Check</th>
+                <th>Report header</th>
+                <th>Computed</th>
+                <th>Diff</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody id="summaryBody"></tbody>
+          </table>
+        </div>
+        <h2 class="section-title" style="margin-top:16px">Duplicate preview</h2>
+        <div class="meta" id="summaryDupMeta"></div>
+        <div class="table-wrap" style="max-height:320px">
+          <table>
+            <thead>
+              <tr>
+                <th>Club</th>
+                <th>Agreement #</th>
+                <th>Member</th>
+                <th>Profit Center</th>
+                <th>Due Date</th>
+                <th>Amount</th>
+                <th>Copies</th>
+                <th>Sheet rows</th>
+              </tr>
+            </thead>
+            <tbody id="summaryDupBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div id="tabDups" class="hidden">
+        <h2 class="section-title">Duplicate records — upload format</h2>
+        <div class="formula">
+          Rows below use the <strong>same columns</strong> as your uploaded Past Due Member Detail file.
+          Extra helper columns (Dup Group / Copy / Excel Row / Flag) are only for QA review.
+        </div>
+        <div class="filters">
+          <div class="field">
+            <label>Club</label>
+            <select id="dupClub"><option value="all">All clubs</option></select>
+          </div>
+          <div class="field">
+            <label>View</label>
+            <select id="dupView">
+              <option value="lines">Every duplicate row (full fields)</option>
+              <option value="groups">Group summary only</option>
+            </select>
+          </div>
+          <div class="field" style="flex:1;min-width:160px">
+            <label>Search</label>
+            <input type="search" id="dupSearch" placeholder="agreement #, name…" />
+          </div>
+          <button class="btn ghost" id="exportDupBtn" type="button" disabled>Export duplicates</button>
+        </div>
+        <div class="meta" id="dupMeta"></div>
+        <div class="table-wrap" style="max-height:620px">
+          <table id="dupTable">
+            <thead id="dupHead"></thead>
+            <tbody id="dupBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div id="tabClubs" class="hidden">
+        <h2 class="section-title">Club-wise</h2>
+        <div class="filters">
+          <div class="field">
+            <label>Show</label>
+            <select id="clubShow">
+              <option value="fail">With duplicates only</option>
+              <option value="all">All clubs</option>
+            </select>
+          </div>
+          <div class="field" style="flex:1;min-width:160px">
+            <label>Search</label>
+            <input type="search" id="clubSearch" placeholder="club #" />
+          </div>
+        </div>
+        <div class="meta" id="clubMeta"></div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Club</th>
+                <th>Rows</th>
+                <th>Agreements</th>
+                <th>Past Due Amt</th>
+                <th>Dup groups</th>
+                <th>Extra rows</th>
+                <th>Status</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="clubBody"></tbody>
+          </table>
+        </div>
+        <div id="clubDetail" class="club-detail hidden"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const TOL = 0.02;
+    // Exact upload report column order
+    const UPLOAD_HEADERS = [
+      "Club #",
+      "Club Name",
+      "Agreement #",
+      "Membership Type",
+      "Member Status",
+      "First Name",
+      "Last Name",
+      "Email",
+      "Phone Number",
+      "Payment Method",
+      "Decline Type",
+      "Decline Reason",
+      "Profit Center",
+      "Due Date",
+      "Days Past Due",
+      "Past Due Amount",
+    ];
+    const QA_HEADERS = ["Dup Group", "Copy", "Excel Row", "Flag"];
+
+    const fileInput = document.getElementById("fileInput");
+    const runBtn = document.getElementById("runBtn");
+    const exportBtn = document.getElementById("exportBtn");
+    const exportDupBtn = document.getElementById("exportDupBtn");
+    const fileMeta = document.getElementById("fileMeta");
+    const progressWrap = document.getElementById("progressWrap");
+    const progressBar = document.getElementById("progressBar");
+
+    let fileBuf = null;
+    let fileName = "";
+    let result = null;
+
+    function money(n) {
+      if (n == null || Number.isNaN(n)) return "—";
+      return n.toLocaleString(undefined, { style: "currency", currency: "USD" });
+    }
+    function near(a, b) {
+      if (a == null || b == null) return false;
+      return Math.abs(a - b) <= TOL;
+    }
+    function blank(v) {
+      return v == null ? "" : String(v).trim();
+    }
+    function escapeHtml(s) {
+      return String(s == null ? "" : s)
+        .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+    }
+    function clubCode(s) {
+      const m = String(s || "").trim().match(/^(\d+)/);
+      return m ? m[1].padStart(5, "0") : "";
+    }
+    /** Display due date like report: MM/DD/YYYY */
+    function formatDueDisplay(iso) {
+      if (!iso || !/^\d{4}-\d{2}-\d{2}/.test(iso)) return iso || "";
+      const [y, m, d] = iso.slice(0, 10).split("-");
+      return `${m}/${d}/${y}`;
+    }
+    function uploadRowValues(r) {
+      return [
+        r.club,
+        r.clubName,
+        r.agreement,
+        r.membershipType,
+        r.status,
+        r.first,
+        r.last,
+        r.email,
+        r.phone,
+        r.payMethod,
+        r.declineType,
+        r.declineReason,
+        r.pc,
+        formatDueDisplay(r.due),
+        r.days,
+        r.amount,
+      ];
+    }
+    function uploadRowCellsHtml(r) {
+      const vals = uploadRowValues(r);
+      return vals.map((v, i) => {
+        if (i === 15) return `<td class="money">${money(v)}</td>`;
+        return `<td>${escapeHtml(v == null ? "" : v)}</td>`;
+      }).join("");
+    }
+    function normDate(v) {
+      if (v == null || v === "") return "";
+      if (v instanceof Date && !Number.isNaN(v.getTime())) {
+        // Use local Y-M-D (toISOString shifts a day in IST for Excel dates)
+        const y = v.getFullYear();
+        const m = String(v.getMonth() + 1).padStart(2, "0");
+        const d = String(v.getDate()).padStart(2, "0");
+        return `${y}-${m}-${d}`;
+      }
+      if (typeof v === "number" && typeof XLSX !== "undefined" && XLSX.SSF) {
+        try {
+          const parsed = XLSX.SSF.parse_date_code(v);
+          if (parsed) {
+            const mm = String(parsed.m).padStart(2, "0");
+            const dd = String(parsed.d).padStart(2, "0");
+            return `${parsed.y}-${mm}-${dd}`;
+          }
+        } catch (_) {}
+      }
+      const s = String(v).trim();
+      const mdy = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/);
+      if (mdy) {
+        let y = Number(mdy[3]);
+        if (y < 100) y += 2000;
+        return `${y}-${String(mdy[1]).padStart(2, "0")}-${String(mdy[2]).padStart(2, "0")}`;
+      }
+      if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+      return s.slice(0, 10);
+    }
+    function roundAmt(v) {
+      const n = num(v);
+      if (n == null) return null;
+      return Math.round(n * 100) / 100;
+    }
+    function num(v) {
+      if (v == null || v === "") return null;
+      if (typeof v === "number") return v;
+      const s = String(v).replace(/[$,\s]/g, "");
+      const n = Number(s);
+      return Number.isFinite(n) ? n : null;
+    }
+    function setProgress(pct) {
+      progressWrap.classList.remove("hidden");
+      progressBar.style.width = Math.max(0, Math.min(100, pct)) + "%";
+    }
+
+    function sheetRows(wb, name) {
+      const sheet = wb.Sheets[name];
+      if (!sheet) return [];
+      return XLSX.utils.sheet_to_json(sheet, { header: 1, defval: null, raw: true });
+    }
+
+    function findHeaderRow(rows) {
+      for (let i = 0; i < Math.min(rows.length, 60); i++) {
+        const cells = (rows[i] || []).map((c) => blank(c).toLowerCase().replace(/\s+/g, " "));
+        const joined = cells.join(" | ");
+        if (joined.includes("agreement") && joined.includes("profit center") && joined.includes("past due amount")) {
+          return i;
+        }
+      }
+      return -1;
+    }
+
+    function mapCols(headerRow) {
+      const cols = {};
+      (headerRow || []).forEach((h, i) => {
+        const k = blank(h).toLowerCase().replace(/\s+/g, " ");
+        if (k === "club #" || k === "club") cols.club = i;
+        else if (k === "club name") cols.clubName = i;
+        else if (k === "agreement #" || k === "agreement") cols.agreement = i;
+        else if (k === "membership type") cols.membershipType = i;
+        else if (k === "member status") cols.status = i;
+        else if (k === "first name") cols.first = i;
+        else if (k === "last name") cols.last = i;
+        else if (k === "email") cols.email = i;
+        else if (k === "phone number" || k === "phone") cols.phone = i;
+        else if (k === "payment method") cols.payMethod = i;
+        else if (k === "decline type") cols.declineType = i;
+        else if (k === "decline reason") cols.declineReason = i;
+        else if (k === "profit center") cols.pc = i;
+        else if (k === "due date") cols.due = i;
+        else if (k === "days past due") cols.days = i;
+        else if (k === "past due amount") cols.amount = i;
+      });
+      return cols;
+    }
+
+    function parseBanner(rows, beforeHeader) {
+      const out = { members: null, amount: null, location: "", date: "", raw: "" };
+      for (let i = 0; i < beforeHeader; i++) {
+        const line = blank((rows[i] || [])[0] || (rows[i] || []).find((c) => c != null));
+        if (!line) continue;
+        if (/total past due/i.test(line) || /location:/i.test(line)) {
+          out.raw = line;
+          const mMem = line.match(/Total Past Due Members:\s*([\d,]+)/i);
+          const mAmt = line.match(/Total Past Due Amount:\s*\$?([\d,]+\.?\d*)/i);
+          const mLoc = line.match(/Location:\s*([^|]+)/i);
+          const mDate = line.match(/Date:\s*([^|]+)/i);
+          if (mMem) out.members = Number(String(mMem[1]).replace(/,/g, ""));
+          if (mAmt) out.amount = Number(String(mAmt[1]).replace(/,/g, ""));
+          if (mLoc) out.location = mLoc[1].trim();
+          if (mDate) out.date = mDate[1].trim();
+        }
+      }
+      return out;
+    }
+
+    function parseSheet(rows, sheetName) {
+      const h = findHeaderRow(rows);
+      if (h < 0) return null;
+      const cols = mapCols(rows[h]);
+      if (cols.agreement == null || cols.pc == null || cols.due == null || cols.amount == null) return null;
+      const banner = parseBanner(rows, h);
+      const records = [];
+      let footerMembers = null;
+      let footerAmount = null;
+
+      for (let i = h + 1; i < rows.length; i++) {
+        const r = rows[i] || [];
+        const clubRaw = blank(r[cols.club]);
+        const agr = blank(r[cols.agreement]);
+        if (/^total$/i.test(clubRaw)) {
+          footerMembers = num(r[cols.agreement]);
+          footerAmount = num(r[cols.amount]);
+          continue;
+        }
+        if (!agr) continue;
+        if (!clubRaw && !blank(r[cols.pc]) && !blank(r[cols.first])) continue;
+
+        const code = clubCode(clubRaw) || clubCode(sheetName) || clubRaw || "UNKNOWN";
+        const amount = roundAmt(r[cols.amount]);
+        const due = normDate(r[cols.due]);
+        const pc = blank(r[cols.pc]);
+        const rec = {
+          sheet: sheetName,
+          sheetRow: i + 1,
+          club: code,
+          clubName: blank(r[cols.clubName]) || sheetName,
+          agreement: agr,
+          membershipType: blank(r[cols.membershipType]),
+          status: blank(r[cols.status]),
+          first: blank(r[cols.first]),
+          last: blank(r[cols.last]),
+          email: blank(r[cols.email]),
+          phone: blank(r[cols.phone]),
+          payMethod: blank(r[cols.payMethod]),
+          declineType: blank(r[cols.declineType]),
+          declineReason: blank(r[cols.declineReason]),
+          pc,
+          due,
+          days: num(r[cols.days]),
+          amount,
+          dupKey: [agr, due, pc, amount == null ? "" : amount.toFixed(2)].join("|"),
+          fullKey: [
+            code, agr, blank(r[cols.membershipType]), blank(r[cols.status]),
+            blank(r[cols.first]), blank(r[cols.last]), blank(r[cols.email]),
+            blank(r[cols.phone]), blank(r[cols.payMethod]), blank(r[cols.declineType]),
+            blank(r[cols.declineReason]), pc, due,
+            amount == null ? "" : amount.toFixed(2),
+          ].join("|"),
+        };
+        records.push(rec);
+      }
+
+      return { sheetName, banner, records, footerMembers, footerAmount };
+    }
+
+    function buildDupGroups(records) {
+      const byKey = new Map();
+      for (const r of records) {
+        if (!byKey.has(r.dupKey)) byKey.set(r.dupKey, []);
+        byKey.get(r.dupKey).push(r);
+      }
+      const groups = [];
+      for (const [, rows] of byKey) {
+        if (rows.length < 2) continue;
+        const fullExact = rows.every((r) => r.fullKey === rows[0].fullKey);
+        groups.push({
+          key: rows[0].dupKey,
+          agreement: rows[0].agreement,
+          due: rows[0].due,
+          pc: rows[0].pc,
+          amount: rows[0].amount,
+          club: rows[0].club,
+          clubName: rows[0].clubName,
+          member: `${rows[0].first} ${rows[0].last}`.trim(),
+          count: rows.length,
+          extra: rows.length - 1,
+          fullExact,
+          rows: rows.slice(),
+        });
+      }
+      groups.sort((a, b) => b.count - a.count || a.agreement.localeCompare(b.agreement));
+      return groups;
+    }
+
+    function summarizeClub(code, name, records) {
+      const groups = buildDupGroups(records);
+      const agreements = new Set(records.map((r) => r.agreement));
+      const amount = records.reduce((s, r) => s + (r.amount || 0), 0);
+      return {
+        code,
+        name,
+        rows: records.length,
+        agreements: agreements.size,
+        amount,
+        dupGroups: groups.length,
+        dupExtra: groups.reduce((s, g) => s + g.extra, 0),
+        dupRows: groups.reduce((s, g) => s + g.count, 0),
+        groups,
+        status: groups.length ? "fail" : "pass",
+      };
+    }
+
+    function analyzeWorkbook(wb) {
+      const sheets = wb.SheetNames.filter((n) => !/^report\s*info$/i.test(n.trim()));
+      const allRecords = [];
+      const banners = [];
+      let footerMembers = null;
+      let footerAmount = null;
+
+      for (const name of sheets) {
+        const parsed = parseSheet(sheetRows(wb, name), name);
+        if (!parsed || !parsed.records.length) continue;
+        allRecords.push(...parsed.records);
+        if (parsed.banner && (parsed.banner.members != null || parsed.banner.amount != null)) {
+          banners.push({ sheet: name, ...parsed.banner });
+        }
+        if (parsed.footerMembers != null) footerMembers = (footerMembers || 0) + parsed.footerMembers;
+        if (parsed.footerAmount != null) footerAmount = (footerAmount || 0) + parsed.footerAmount;
+      }
+
+      if (!allRecords.length) {
+        throw new Error("No Past Due Member Detail rows found. Expect columns: Agreement #, Profit Center, Due Date, Past Due Amount.");
+      }
+
+      const byClub = new Map();
+      for (const r of allRecords) {
+        if (!byClub.has(r.club)) byClub.set(r.club, { name: r.clubName, records: [] });
+        const b = byClub.get(r.club);
+        if (!b.name && r.clubName) b.name = r.clubName;
+        b.records.push(r);
+      }
+
+      const clubs = [...byClub.entries()]
+        .map(([code, v]) => summarizeClub(code, v.name || code, v.records))
+        .sort((a, b) => Number(a.code) - Number(b.code) || a.code.localeCompare(b.code));
+
+      const groups = buildDupGroups(allRecords);
+      const uniqueAgr = new Set(allRecords.map((r) => r.agreement)).size;
+      const totalAmount = allRecords.reduce((s, r) => s + (r.amount || 0), 0);
+
+      const headerMembers = footerMembers != null
+        ? footerMembers
+        : banners.reduce((s, b) => s + (b.members || 0), 0) || null;
+      const headerAmount = footerAmount != null
+        ? footerAmount
+        : banners.reduce((s, b) => s + (b.amount || 0), 0) || null;
+
+      // If multiple banners were club-level and we summed, fine; if single banner for one club, use it.
+      const headerMembersUse = banners.length === 1 ? banners[0].members : headerMembers;
+      const headerAmountUse = banners.length === 1 ? banners[0].amount : headerAmount;
+
+      return {
+        fileName,
+        records: allRecords,
+        clubs,
+        groups,
+        uniqueAgr,
+        totalAmount,
+        totalRows: allRecords.length,
+        dupExtra: groups.reduce((s, g) => s + g.extra, 0),
+        headerMembers: headerMembersUse,
+        headerAmount: headerAmountUse,
+        banners,
+      };
+    }
+
+    fileInput.addEventListener("change", async () => {
+      const f = fileInput.files && fileInput.files[0];
+      fileBuf = null;
+      fileName = "";
+      result = null;
+      runBtn.disabled = true;
+      exportBtn.disabled = true;
+      exportDupBtn.disabled = true;
+      document.getElementById("resultsCard").classList.add("hidden");
+      document.getElementById("kpiRow").classList.add("hidden");
+      if (!f) {
+        fileMeta.textContent = "Upload Past Due Member Detail (.xlsx).";
+        return;
+      }
+      fileName = f.name;
+      fileMeta.textContent = `Selected: ${f.name} (${Math.round(f.size / 1024)} KB) — click Run Validation.`;
+      fileBuf = await f.arrayBuffer();
+      runBtn.disabled = false;
+    });
+
+    runBtn.addEventListener("click", async () => {
+      if (!fileBuf) return;
+      runBtn.disabled = true;
+      setProgress(8);
+      try {
+        setProgress(30);
+        const wb = XLSX.read(fileBuf, { type: "array", cellDates: true });
+        setProgress(70);
+        result = analyzeWorkbook(wb);
+        setProgress(100);
+        fillClubFilters();
+        renderAll();
+        exportBtn.disabled = false;
+        exportDupBtn.disabled = false;
+        fileMeta.textContent = `Loaded ${fileName} · ${result.totalRows.toLocaleString()} rows · ${result.clubs.length} club(s)`;
+      } catch (err) {
+        console.error(err);
+        fileMeta.textContent = "Error: " + (err && err.message ? err.message : String(err));
+        alert(fileMeta.textContent);
+      } finally {
+        runBtn.disabled = !fileBuf;
+        setTimeout(() => progressWrap.classList.add("hidden"), 400);
+      }
+    });
+
+    function fillClubFilters() {
+      const opts = [`<option value="all">All clubs</option>`]
+        .concat(result.clubs.map((c) => `<option value="${escapeHtml(c.code)}">${escapeHtml(c.code)} — ${escapeHtml(c.name)}</option>`))
+        .join("");
+      document.getElementById("dupClub").innerHTML = opts;
+    }
+
+    function showTab(id) {
+      document.querySelectorAll(".tab").forEach((t) => t.classList.toggle("active", t.dataset.tab === id));
+      ["summary", "dups", "clubs"].forEach((k) => {
+        const el = document.getElementById("tab" + k.charAt(0).toUpperCase() + k.slice(1));
+        if (el) el.classList.toggle("hidden", id !== k);
+      });
+    }
+
+    function renderAll() {
+      document.getElementById("resultsCard").classList.remove("hidden");
+      document.getElementById("kpiRow").classList.remove("hidden");
+      document.getElementById("clubDetail").classList.add("hidden");
+      document.getElementById("clubDetail").innerHTML = "";
+
+      const g = result.groups.length;
+      const extra = result.dupExtra;
+      document.getElementById("kpiRows").textContent = result.totalRows.toLocaleString();
+      document.getElementById("kpiAgr").textContent = result.uniqueAgr.toLocaleString();
+      document.getElementById("kpiClubs").textContent = String(result.clubs.length);
+      document.getElementById("kpiDupGroups").textContent = String(g);
+      document.getElementById("kpiDupGroups").className = "v " + (g ? "bad" : "ok");
+      document.getElementById("kpiDupExtra").textContent = String(extra);
+      document.getElementById("kpiDupExtra").className = "v " + (extra ? "bad" : "ok");
+
+      const banner = document.getElementById("statusBanner");
+      if (!g) {
+        banner.className = "banner pass";
+        banner.innerHTML = `<span class="pill ok">PASS</span> No duplicate Agreement + Due Date + Profit Center + Amount rows found across ${result.clubs.length} club(s).`;
+      } else {
+        banner.className = "banner fail";
+        banner.innerHTML = `<span class="pill bad">DUPLICATES FOUND</span>
+          <strong class="bad">${g}</strong> duplicate group(s) ·
+          <strong class="bad">${extra}</strong> extra row(s) to review.
+          Open <em>Duplicates</em> or club <em>View details</em>.`;
+      }
+
+      renderSummary();
+      renderDups();
+      renderClubs();
+      showTab(g ? "dups" : "summary");
+    }
+
+    function renderSummary() {
+      const checks = [];
+      const hm = result.headerMembers;
+      const ha = result.headerAmount;
+      checks.push({
+        name: "Unique agreements vs header / footer members",
+        header: hm,
+        computed: result.uniqueAgr,
+        ok: hm == null ? null : hm === result.uniqueAgr,
+      });
+      checks.push({
+        name: "Sum Past Due Amount vs header / footer total",
+        header: ha,
+        computed: result.totalAmount,
+        ok: ha == null ? null : near(ha, result.totalAmount),
+        money: true,
+      });
+      checks.push({
+        name: "Duplicate groups (agr + due + PC + amt)",
+        header: "—",
+        computed: result.groups.length,
+        ok: result.groups.length === 0,
+      });
+
+      document.getElementById("summaryMeta").textContent =
+        `${result.fileName} · ${result.totalRows.toLocaleString()} detail rows · ${result.clubs.length} club(s) · amount ${money(result.totalAmount)}`;
+
+      document.getElementById("summaryBody").innerHTML = checks.map((c) => {
+        const hdr = c.money && typeof c.header === "number" ? money(c.header)
+          : (c.header == null ? "—" : c.header);
+        const comp = c.money ? money(c.computed) : c.computed;
+        let diff = "—";
+        if (typeof c.header === "number" && typeof c.computed === "number") {
+          diff = c.money ? money(c.computed - c.header) : (c.computed - c.header);
+        }
+        const st = c.ok == null ? '<span class="pill warn">N/A</span>'
+          : (c.ok ? '<span class="pill ok">PASS</span>' : '<span class="pill bad">FAIL</span>');
+        return `<tr>
+          <td>${escapeHtml(c.name)}</td>
+          <td class="money">${hdr}</td>
+          <td class="money">${comp}</td>
+          <td class="money">${diff}</td>
+          <td>${st}</td>
+        </tr>`;
+      }).join("");
+
+      const preview = result.groups.slice(0, 50);
+      document.getElementById("summaryDupMeta").textContent = result.groups.length
+        ? `${result.groups.length} duplicate group(s) — showing ${preview.length}. Open tab 2 for full upload-format columns + export.`
+        : "No duplicates found.";
+      document.getElementById("summaryDupBody").innerHTML = preview.map((g) => `
+        <tr>
+          <td>${escapeHtml(g.club)}</td>
+          <td><strong>${escapeHtml(g.agreement)}</strong></td>
+          <td>${escapeHtml(g.member)}</td>
+          <td>${escapeHtml(g.pc)}</td>
+          <td>${escapeHtml(formatDueDisplay(g.due))}</td>
+          <td class="money">${money(g.amount)}</td>
+          <td class="bad">${g.count}</td>
+          <td class="note">${g.rows.map((r) => r.sheetRow).join(", ")}</td>
+        </tr>
+      `).join("") || `<tr><td colspan="8" class="note">No duplicate records.</td></tr>`;
+    }
+
+    function filteredDupGroups() {
+      const club = document.getElementById("dupClub").value;
+      const q = document.getElementById("dupSearch").value.trim().toLowerCase();
+      let list = result.groups.slice();
+      if (club !== "all") list = list.filter((g) => g.club === club);
+      if (q) {
+        list = list.filter((g) =>
+          `${g.agreement} ${g.member} ${g.pc} ${g.club} ${g.rows.map((r) => r.sheetRow).join(" ")}`.toLowerCase().includes(q)
+        );
+      }
+      return list;
+    }
+
+    function renderDups() {
+      const list = filteredDupGroups();
+      const view = document.getElementById("dupView").value;
+      const lineCount = list.reduce((s, g) => s + g.count, 0);
+      document.getElementById("dupMeta").textContent =
+        view === "lines"
+          ? `Showing ${lineCount} duplicate row(s) in ${list.length} group(s) · columns match upload file`
+          : `Showing ${list.length} duplicate group(s)`;
+
+      const colCount = QA_HEADERS.length + UPLOAD_HEADERS.length;
+      document.getElementById("dupHead").innerHTML = `<tr>${
+        [...QA_HEADERS, ...UPLOAD_HEADERS].map((h) => `<th>${escapeHtml(h)}</th>`).join("")
+      }</tr>`;
+
+      if (!list.length) {
+        document.getElementById("dupBody").innerHTML =
+          `<tr><td colspan="${colCount}" class="note">No duplicates for this filter.</td></tr>`;
+        return;
+      }
+
+      if (view === "groups") {
+        document.getElementById("dupBody").innerHTML = list.map((g, gi) => {
+          const r = g.rows[0];
+          return `<tr>
+            <td>G${gi + 1}</td>
+            <td class="bad">${g.count} copies</td>
+            <td class="note">${g.rows.map((x) => x.sheetRow).join(", ")}</td>
+            <td><span class="pill bad">DUPLICATE</span></td>
+            ${uploadRowCellsHtml(r)}
+          </tr>`;
+        }).join("");
+        return;
+      }
+
+      const html = [];
+      list.forEach((g, gi) => {
+        g.rows.forEach((r, ri) => {
+          html.push(`<tr>
+            <td>G${gi + 1}</td>
+            <td>${ri + 1} / ${g.count}</td>
+            <td><strong>${r.sheetRow}</strong></td>
+            <td><span class="pill bad">${ri === 0 ? "KEEP" : "EXTRA"}</span></td>
+            ${uploadRowCellsHtml(r)}
+          </tr>`);
+        });
+      });
+      document.getElementById("dupBody").innerHTML = html.join("");
+    }
+
+    function renderClubDetail(code) {
+      const panel = document.getElementById("clubDetail");
+      const club = result.clubs.find((c) => c.code === code);
+      if (!club) {
+        panel.classList.add("hidden");
+        return;
+      }
+      const colCount = QA_HEADERS.length + UPLOAD_HEADERS.length;
+      panel.classList.remove("hidden");
+      panel.innerHTML = `
+        <div class="head">
+          <div>
+            <strong>${escapeHtml(club.code)}</strong> — ${escapeHtml(club.name)}
+            <div class="note">${club.rows.toLocaleString()} rows · ${club.agreements} agreements · ${money(club.amount)}</div>
+          </div>
+          <div class="upload-row">
+            <button class="btn ghost" type="button" id="clubExportDup">Export club duplicates</button>
+            <button class="btn ghost" type="button" id="clubDetailClose">Close</button>
+          </div>
+        </div>
+        <div class="meta" style="margin-bottom:8px">
+          Duplicate groups: <strong class="${club.dupGroups ? "bad" : "ok"}">${club.dupGroups}</strong> ·
+          Extra rows: <strong class="${club.dupExtra ? "bad" : "ok"}">${club.dupExtra}</strong>
+          · same upload columns
+        </div>
+        <div class="table-wrap" style="max-height:420px">
+          <table>
+            <thead>
+              <tr>${[...QA_HEADERS, ...UPLOAD_HEADERS].map((h) => `<th>${escapeHtml(h)}</th>`).join("")}</tr>
+            </thead>
+            <tbody>
+              ${club.groups.length ? club.groups.map((g, gi) => g.rows.map((r, ri) => `
+                <tr>
+                  <td>G${gi + 1}</td>
+                  <td>${ri + 1} / ${g.count}</td>
+                  <td><strong>${r.sheetRow}</strong></td>
+                  <td><span class="pill bad">${ri === 0 ? "KEEP" : "EXTRA"}</span></td>
+                  ${uploadRowCellsHtml(r)}
+                </tr>
+              `).join("")).join("") : `<tr><td colspan="${colCount}" class="note">No duplicates in this club.</td></tr>`}
+            </tbody>
+          </table>
+        </div>`;
+      document.getElementById("clubDetailClose").addEventListener("click", () => {
+        panel.classList.add("hidden");
+      });
+      document.getElementById("clubExportDup").addEventListener("click", () => {
+        exportDuplicates({ clubCode: code, scopeLabel: code });
+      });
+      panel.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
+
+    function renderClubs() {
+      const mode = document.getElementById("clubShow").value;
+      const q = document.getElementById("clubSearch").value.trim().toLowerCase();
+      let list = result.clubs.slice();
+      if (mode === "fail") list = list.filter((c) => c.status === "fail");
+      if (q) list = list.filter((c) => `${c.code} ${c.name}`.toLowerCase().includes(q));
+      document.getElementById("clubMeta").textContent = `Showing ${list.length} of ${result.clubs.length}`;
+      document.getElementById("clubBody").innerHTML = list.map((c) => `
+        <tr>
+          <td><strong>${escapeHtml(c.code)}</strong><div class="note">${escapeHtml(c.name)}</div></td>
+          <td>${c.rows.toLocaleString()}</td>
+          <td>${c.agreements.toLocaleString()}</td>
+          <td class="money">${money(c.amount)}</td>
+          <td class="${c.dupGroups ? "bad" : "ok"}">${c.dupGroups}</td>
+          <td class="${c.dupExtra ? "bad" : "ok"}">${c.dupExtra}</td>
+          <td><span class="pill ${c.status === "pass" ? "ok" : "bad"}">${c.status.toUpperCase()}</span></td>
+          <td><button class="btn ghost" type="button" data-open-club="${escapeHtml(c.code)}">View details</button></td>
+        </tr>
+      `).join("") || `<tr><td colspan="8" class="note">No clubs for this filter.</td></tr>`;
+
+      document.querySelectorAll("[data-open-club]").forEach((btn) => {
+        btn.addEventListener("click", () => renderClubDetail(btn.getAttribute("data-open-club")));
+      });
+    }
+
+    function exportDuplicates(opts) {
+      opts = opts || {};
+      if (!result || !result.groups.length) {
+        alert("No duplicate rows to export.");
+        return;
+      }
+      let groups = result.groups;
+      if (opts.clubCode) groups = groups.filter((g) => g.club === opts.clubCode);
+      // Prefer current Duplicates-tab filter when exporting from main buttons
+      if (!opts.clubCode && !opts.ignoreFilter) {
+        groups = filteredDupGroups();
+      }
+      if (!groups.length) {
+        alert("No duplicate rows for current filter.");
+        return;
+      }
+
+      const header = [...QA_HEADERS, ...UPLOAD_HEADERS];
+      const aoa = [header];
+      groups.forEach((g, gi) => {
+        g.rows.forEach((r, ri) => {
+          aoa.push([
+            `G${gi + 1}`,
+            `${ri + 1} / ${g.count}`,
+            r.sheetRow,
+            ri === 0 ? "KEEP" : "EXTRA",
+            ...uploadRowValues(r),
+          ]);
+        });
+      });
+
+      // Sheet matching upload field order (QA cols first for review)
+      const ws = XLSX.utils.aoa_to_sheet(aoa);
+      // Also a clean sheet with ONLY upload columns (exact source format)
+      const clean = [UPLOAD_HEADERS.slice()];
+      groups.forEach((g) => {
+        g.rows.forEach((r) => clean.push(uploadRowValues(r)));
+      });
+      const wsClean = XLSX.utils.aoa_to_sheet(clean);
+
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, wsClean, "Duplicates");
+      XLSX.utils.book_append_sheet(wb, ws, "Duplicates + QA flags");
+      const scope = opts.scopeLabel || (document.getElementById("dupClub").value === "all" ? "all-clubs" : document.getElementById("dupClub").value);
+      XLSX.writeFile(wb, `past-due-duplicates-${scope}-${new Date().toISOString().slice(0, 10)}.xlsx`);
+    }
+
+    document.querySelectorAll(".tab").forEach((t) => t.addEventListener("click", () => showTab(t.dataset.tab)));
+    document.getElementById("dupClub").addEventListener("change", renderDups);
+    document.getElementById("dupView").addEventListener("change", renderDups);
+    document.getElementById("dupSearch").addEventListener("input", renderDups);
+    document.getElementById("clubShow").addEventListener("change", renderClubs);
+    document.getElementById("clubSearch").addEventListener("input", renderClubs);
+
+    ["kpiDupGroups", "kpiDupExtra"].forEach((id) => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.parentElement.style.cursor = "pointer";
+      el.parentElement.title = "Open Duplicates tab";
+      el.parentElement.addEventListener("click", () => {
+        if (!result) return;
+        showTab("dups");
+      });
+    });
+
+    exportBtn.addEventListener("click", () => exportDuplicates());
+    exportDupBtn.addEventListener("click", () => exportDuplicates());
+  </script>
+</body>
+</html>

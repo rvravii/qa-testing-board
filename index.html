@@ -571,6 +571,7 @@
         </button>
         <div class="nav-group" id="group-pf">
           <button class="nav-child" data-page="drdr" type="button">DRDR</button>
+          <button class="nav-child" data-page="past-due-member" type="button">Past Due Member Detail</button>
         </div>
 
         <div class="whats-new">
@@ -599,6 +600,7 @@
         cards: [
           { id: "daily-deposit", title: "Daily Deposit Analysis (Ignite)", desc: "Settlement balance mismatch check with upload, month filter, and export." },
           { id: "drdr", title: "DRDR", desc: "DRDR summary + club-wise field validation with filters." },
+          { id: "past-due-member", title: "Past Due Member Detail", desc: "Agreement-level duplicate check across summary and club-wise views." },
         ],
       },
       "insight-reports": {
@@ -642,12 +644,14 @@
       "pf-reports": {
         kicker: "PF REPORTS",
         title: "PF reports",
-        desc: "PF report group. Open DRDR from the left panel.",
+        desc: "PF report group. Open a child report from the left panel.",
         cards: [
           { id: "drdr", title: "DRDR", desc: "Summary + club-wise DRDR field vs total validation with filters." },
+          { id: "past-due-member", title: "Past Due Member Detail", desc: "Agreement-level duplicate check (agr + due date + profit center + amount), summary + club-wise." },
         ],
       },
       drdr: { embed: "drdr.html?v=1" },
+      "past-due-member": { embed: "past-due-member.html?v=1" },
     };
 
     const main = document.getElementById("main");
@@ -669,7 +673,7 @@
       if (["eft-allocation", "eft-annual", "accounting-journal", "eom-reports"].includes(page)) {
         document.querySelector('[data-toggle="eom"]').classList.add("active");
       }
-      if (["drdr", "pf-reports"].includes(page)) {
+      if (["drdr", "past-due-member", "pf-reports"].includes(page)) {
         document.querySelector('[data-toggle="pf"]').classList.add("active");
       }
       if (["aje-standard", "insight-reports"].includes(page)) {

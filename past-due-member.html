@@ -89,6 +89,13 @@
       display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between;
       margin-bottom: 10px;
     }
+    .agr-row { cursor: pointer; }
+    .agr-row:hover td { background: rgba(56, 189, 248, 0.06); }
+    .breadcrumb { color: var(--muted); font-size: 0.84rem; margin: 0 0 10px; }
+    .breadcrumb button {
+      background: none; border: 0; color: var(--accent); font-weight: 700; cursor: pointer; padding: 0;
+      font-size: inherit;
+    }
     @media (max-width: 900px) { .kpis { grid-template-columns: 1fr 1fr; } }
   </style>
 </head>
@@ -116,7 +123,7 @@
       <div class="kpi"><div class="l">Total rows</div><div class="v" id="kpiRows">—</div><div class="hint">Detail lines parsed</div></div>
       <div class="kpi"><div class="l">Unique agreements</div><div class="v" id="kpiAgr">—</div><div class="hint">Distinct Agreement #</div></div>
       <div class="kpi"><div class="l">Clubs</div><div class="v" id="kpiClubs">—</div><div class="hint">Club sheets / codes</div></div>
-      <div class="kpi"><div class="l">Duplicate groups</div><div class="v" id="kpiDupGroups">—</div><div class="hint">Same agr+due+PC+amt</div></div>
+      <div class="kpi"><div class="l">Agreements w/ dups</div><div class="v" id="kpiDupGroups">—</div><div class="hint">Distinct agreements with duplicates</div></div>
       <div class="kpi"><div class="l">Extra duplicate rows</div><div class="v" id="kpiDupExtra">—</div><div class="hint">Rows beyond the first keep</div></div>
     </div>
 
@@ -149,20 +156,18 @@
             <tbody id="summaryBody"></tbody>
           </table>
         </div>
-        <h2 class="section-title" style="margin-top:16px">Duplicate preview</h2>
+        <h2 class="section-title" style="margin-top:16px">Agreements with duplicates</h2>
         <div class="meta" id="summaryDupMeta"></div>
         <div class="table-wrap" style="max-height:320px">
           <table>
             <thead>
               <tr>
-                <th>Club</th>
                 <th>Agreement #</th>
+                <th>Club</th>
                 <th>Member</th>
-                <th>Profit Center</th>
-                <th>Due Date</th>
-                <th>Amount</th>
-                <th>Copies</th>
-                <th>Sheet rows</th>
+                <th>Dup groups</th>
+                <th>Dup rows</th>
+                <th>Extra rows</th>
               </tr>
             </thead>
             <tbody id="summaryDupBody"></tbody>
@@ -171,35 +176,64 @@
       </div>
 
       <div id="tabDups" class="hidden">
-        <h2 class="section-title">Duplicate records — upload format</h2>
+        <h2 class="section-title">Duplicates by Agreement</h2>
         <div class="formula">
-          Rows below use the <strong>same columns</strong> as your uploaded Past Due Member Detail file.
-          Extra helper columns (Dup Group / Copy / Excel Row / Flag) are only for QA review.
+          <strong>Step 1:</strong> Agreements jisme duplicate mila — kitne groups / kitni rows.
+          <strong>Step 2:</strong> Agreement pe click → limited columns (Profit Center, Due Date, Amount…). Full fields export me milenge.
         </div>
-        <div class="filters">
+        <div class="filters" id="dupListFilters">
           <div class="field">
             <label>Club</label>
             <select id="dupClub"><option value="all">All clubs</option></select>
           </div>
-          <div class="field">
-            <label>View</label>
-            <select id="dupView">
-              <option value="lines">Every duplicate row (full fields)</option>
-              <option value="groups">Group summary only</option>
-            </select>
-          </div>
           <div class="field" style="flex:1;min-width:160px">
-            <label>Search</label>
-            <input type="search" id="dupSearch" placeholder="agreement #, name…" />
+            <label>Search agreement</label>
+            <input type="search" id="dupSearch" placeholder="agreement #, member…" />
           </div>
           <button class="btn ghost" id="exportDupBtn" type="button" disabled>Export duplicates</button>
         </div>
-        <div class="meta" id="dupMeta"></div>
-        <div class="table-wrap" style="max-height:620px">
-          <table id="dupTable">
-            <thead id="dupHead"></thead>
-            <tbody id="dupBody"></tbody>
-          </table>
+
+        <div id="dupAgreementList">
+          <div class="meta" id="dupMeta"></div>
+          <div class="table-wrap" style="max-height:620px">
+            <table>
+              <thead>
+                <tr>
+                  <th>Agreement #</th>
+                  <th>Club</th>
+                  <th>Member</th>
+                  <th>Dup groups</th>
+                  <th>Duplicate rows</th>
+                  <th>Extra rows</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="dupAgrBody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div id="dupAgreementDetail" class="hidden">
+          <div class="breadcrumb">
+            <button type="button" id="dupBackBtn">← All agreements</button>
+            <span id="dupDetailCrumb"></span>
+          </div>
+          <div class="club-detail" style="margin-top:0">
+            <div class="head">
+              <div>
+                <strong id="dupDetailTitle">—</strong>
+                <div class="note" id="dupDetailMeta"></div>
+              </div>
+              <button class="btn ghost" type="button" id="exportAgrDupBtn">Export this agreement</button>
+            </div>
+            <div class="meta" id="dupDetailGroupsMeta"></div>
+            <div class="table-wrap" style="max-height:560px">
+              <table>
+                <thead id="dupHead"></thead>
+                <tbody id="dupBody"></tbody>
+              </table>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -263,6 +297,32 @@
       "Past Due Amount",
     ];
     const QA_HEADERS = ["Dup Group", "Copy", "Excel Row", "Flag"];
+    // On-screen detail: limited columns (full set still in export)
+    const DETAIL_HEADERS = [
+      "Flag",
+      "Membership Type",
+      "Profit Center",
+      "Due Date",
+      "Past Due Amount",
+      "Days Past Due",
+      "Member Status",
+      "First Name",
+      "Last Name",
+    ];
+
+    function detailRowCellsHtml(r, gi, ri, count) {
+      return `
+        <td><span class="pill bad">${ri === 0 ? "KEEP" : "EXTRA"}</span><div class="note">G${gi + 1} · ${ri + 1}/${count}</div></td>
+        <td>${escapeHtml(r.membershipType)}</td>
+        <td>${escapeHtml(r.pc)}</td>
+        <td>${escapeHtml(formatDueDisplay(r.due))}</td>
+        <td class="money">${money(r.amount)}</td>
+        <td>${r.days != null ? r.days : "—"}</td>
+        <td>${escapeHtml(r.status)}</td>
+        <td>${escapeHtml(r.first)}</td>
+        <td>${escapeHtml(r.last)}</td>
+      `;
+    }
 
     const fileInput = document.getElementById("fileInput");
     const runBtn = document.getElementById("runBtn");
@@ -275,6 +335,7 @@
     let fileBuf = null;
     let fileName = "";
     let result = null;
+    let selectedDupAgreement = null; // { club, agreement }
 
     function money(n) {
       if (n == null || Number.isNaN(n)) return "—";
@@ -597,6 +658,7 @@
         records: allRecords,
         clubs,
         groups,
+        agreementDups: buildAgreementDupSummaries(groups),
         uniqueAgr,
         totalAmount,
         totalRows: allRecords.length,
@@ -605,6 +667,36 @@
         headerAmount: headerAmountUse,
         banners,
       };
+    }
+
+    function buildAgreementDupSummaries(groups) {
+      const map = new Map();
+      for (const g of groups) {
+        const id = g.club + "|" + g.agreement;
+        if (!map.has(id)) {
+          map.set(id, {
+            id,
+            club: g.club,
+            clubName: g.clubName,
+            agreement: g.agreement,
+            member: g.member,
+            groups: [],
+            dupGroups: 0,
+            dupRows: 0,
+            extra: 0,
+          });
+        }
+        const a = map.get(id);
+        a.groups.push(g);
+        a.dupGroups += 1;
+        a.dupRows += g.count;
+        a.extra += g.extra;
+        if (!a.member && g.member) a.member = g.member;
+        if (!a.clubName && g.clubName) a.clubName = g.clubName;
+      }
+      return [...map.values()].sort((a, b) =>
+        b.dupRows - a.dupRows || a.agreement.localeCompare(b.agreement)
+      );
     }
 
     fileInput.addEventListener("change", async () => {
@@ -672,14 +764,16 @@
       document.getElementById("kpiRow").classList.remove("hidden");
       document.getElementById("clubDetail").classList.add("hidden");
       document.getElementById("clubDetail").innerHTML = "";
+      selectedDupAgreement = null;
 
       const g = result.groups.length;
+      const agrCount = result.agreementDups.length;
       const extra = result.dupExtra;
       document.getElementById("kpiRows").textContent = result.totalRows.toLocaleString();
       document.getElementById("kpiAgr").textContent = result.uniqueAgr.toLocaleString();
       document.getElementById("kpiClubs").textContent = String(result.clubs.length);
-      document.getElementById("kpiDupGroups").textContent = String(g);
-      document.getElementById("kpiDupGroups").className = "v " + (g ? "bad" : "ok");
+      document.getElementById("kpiDupGroups").textContent = String(agrCount);
+      document.getElementById("kpiDupGroups").className = "v " + (agrCount ? "bad" : "ok");
       document.getElementById("kpiDupExtra").textContent = String(extra);
       document.getElementById("kpiDupExtra").className = "v " + (extra ? "bad" : "ok");
 
@@ -690,9 +784,10 @@
       } else {
         banner.className = "banner fail";
         banner.innerHTML = `<span class="pill bad">DUPLICATES FOUND</span>
+          <strong class="bad">${agrCount}</strong> agreement(s) ·
           <strong class="bad">${g}</strong> duplicate group(s) ·
-          <strong class="bad">${extra}</strong> extra row(s) to review.
-          Open <em>Duplicates</em> or club <em>View details</em>.`;
+          <strong class="bad">${extra}</strong> extra row(s).
+          Open <em>Duplicates</em> → click an agreement for line detail.`;
       }
 
       renderSummary();
@@ -717,6 +812,12 @@
         computed: result.totalAmount,
         ok: ha == null ? null : near(ha, result.totalAmount),
         money: true,
+      });
+      checks.push({
+        name: "Agreements with duplicates",
+        header: "—",
+        computed: result.agreementDups.length,
+        ok: result.agreementDups.length === 0,
       });
       checks.push({
         name: "Duplicate groups (agr + due + PC + amt)",
@@ -747,84 +848,143 @@
         </tr>`;
       }).join("");
 
-      const preview = result.groups.slice(0, 50);
-      document.getElementById("summaryDupMeta").textContent = result.groups.length
-        ? `${result.groups.length} duplicate group(s) — showing ${preview.length}. Open tab 2 for full upload-format columns + export.`
+      const preview = result.agreementDups.slice(0, 50);
+      document.getElementById("summaryDupMeta").textContent = result.agreementDups.length
+        ? `${result.agreementDups.length} agreement(s) with duplicates — showing ${preview.length}. Open tab 2 and click an agreement for line detail.`
         : "No duplicates found.";
-      document.getElementById("summaryDupBody").innerHTML = preview.map((g) => `
+      document.getElementById("summaryDupBody").innerHTML = preview.map((a) => `
         <tr>
-          <td>${escapeHtml(g.club)}</td>
-          <td><strong>${escapeHtml(g.agreement)}</strong></td>
-          <td>${escapeHtml(g.member)}</td>
-          <td>${escapeHtml(g.pc)}</td>
-          <td>${escapeHtml(formatDueDisplay(g.due))}</td>
-          <td class="money">${money(g.amount)}</td>
-          <td class="bad">${g.count}</td>
-          <td class="note">${g.rows.map((r) => r.sheetRow).join(", ")}</td>
+          <td><strong>${escapeHtml(a.agreement)}</strong></td>
+          <td>${escapeHtml(a.club)}</td>
+          <td>${escapeHtml(a.member)}</td>
+          <td class="bad">${a.dupGroups}</td>
+          <td class="bad">${a.dupRows}</td>
+          <td class="bad">${a.extra}</td>
         </tr>
-      `).join("") || `<tr><td colspan="8" class="note">No duplicate records.</td></tr>`;
+      `).join("") || `<tr><td colspan="6" class="note">No duplicate records.</td></tr>`;
     }
 
-    function filteredDupGroups() {
+    function filteredAgreementDups() {
       const club = document.getElementById("dupClub").value;
       const q = document.getElementById("dupSearch").value.trim().toLowerCase();
-      let list = result.groups.slice();
-      if (club !== "all") list = list.filter((g) => g.club === club);
+      let list = result.agreementDups.slice();
+      if (club !== "all") list = list.filter((a) => a.club === club);
       if (q) {
-        list = list.filter((g) =>
-          `${g.agreement} ${g.member} ${g.pc} ${g.club} ${g.rows.map((r) => r.sheetRow).join(" ")}`.toLowerCase().includes(q)
+        list = list.filter((a) =>
+          `${a.agreement} ${a.member} ${a.club} ${a.clubName}`.toLowerCase().includes(q)
         );
       }
       return list;
     }
 
-    function renderDups() {
-      const list = filteredDupGroups();
-      const view = document.getElementById("dupView").value;
-      const lineCount = list.reduce((s, g) => s + g.count, 0);
-      document.getElementById("dupMeta").textContent =
-        view === "lines"
-          ? `Showing ${lineCount} duplicate row(s) in ${list.length} group(s) · columns match upload file`
-          : `Showing ${list.length} duplicate group(s)`;
+    function filteredDupGroups() {
+      // used by export — respect club/search and optional selected agreement
+      let list = result.groups.slice();
+      const club = document.getElementById("dupClub").value;
+      const q = document.getElementById("dupSearch").value.trim().toLowerCase();
+      if (club !== "all") list = list.filter((g) => g.club === club);
+      if (selectedDupAgreement) {
+        list = list.filter((g) =>
+          g.club === selectedDupAgreement.club && g.agreement === selectedDupAgreement.agreement
+        );
+      } else if (q) {
+        list = list.filter((g) =>
+          `${g.agreement} ${g.member} ${g.pc} ${g.club}`.toLowerCase().includes(q)
+        );
+      }
+      return list;
+    }
 
-      const colCount = QA_HEADERS.length + UPLOAD_HEADERS.length;
+    function showAgreementList() {
+      selectedDupAgreement = null;
+      document.getElementById("dupAgreementList").classList.remove("hidden");
+      document.getElementById("dupAgreementDetail").classList.add("hidden");
+      document.getElementById("dupListFilters").classList.remove("hidden");
+      renderAgreementList();
+    }
+
+    function openAgreementDetail(club, agreement) {
+      selectedDupAgreement = { club, agreement };
+      const agr = result.agreementDups.find((a) => a.club === club && a.agreement === agreement);
+      if (!agr) {
+        showAgreementList();
+        return;
+      }
+      document.getElementById("dupAgreementList").classList.add("hidden");
+      document.getElementById("dupAgreementDetail").classList.remove("hidden");
+      document.getElementById("dupListFilters").classList.add("hidden");
+
+      document.getElementById("dupDetailCrumb").textContent = ` / ${agr.agreement}`;
+      document.getElementById("dupDetailTitle").textContent =
+        `${agr.agreement} — ${agr.member || "Member"}`;
+      document.getElementById("dupDetailMeta").textContent =
+        `Club ${agr.club} ${agr.clubName || ""} · ${agr.dupGroups} dup group(s) · ${agr.dupRows} rows · ${agr.extra} extra`;
+      document.getElementById("dupDetailGroupsMeta").textContent =
+        "Limited columns on screen (PC / Due Date / Amount — where duplicate matches). Use Export for full upload-format fields.";
+
+      const colCount = DETAIL_HEADERS.length;
       document.getElementById("dupHead").innerHTML = `<tr>${
-        [...QA_HEADERS, ...UPLOAD_HEADERS].map((h) => `<th>${escapeHtml(h)}</th>`).join("")
+        DETAIL_HEADERS.map((h) => `<th>${escapeHtml(h)}</th>`).join("")
       }</tr>`;
 
-      if (!list.length) {
-        document.getElementById("dupBody").innerHTML =
-          `<tr><td colspan="${colCount}" class="note">No duplicates for this filter.</td></tr>`;
-        return;
-      }
-
-      if (view === "groups") {
-        document.getElementById("dupBody").innerHTML = list.map((g, gi) => {
-          const r = g.rows[0];
-          return `<tr>
-            <td>G${gi + 1}</td>
-            <td class="bad">${g.count} copies</td>
-            <td class="note">${g.rows.map((x) => x.sheetRow).join(", ")}</td>
-            <td><span class="pill bad">DUPLICATE</span></td>
-            ${uploadRowCellsHtml(r)}
-          </tr>`;
-        }).join("");
-        return;
-      }
-
       const html = [];
-      list.forEach((g, gi) => {
+      agr.groups.forEach((g, gi) => {
         g.rows.forEach((r, ri) => {
-          html.push(`<tr>
-            <td>G${gi + 1}</td>
-            <td>${ri + 1} / ${g.count}</td>
-            <td><strong>${r.sheetRow}</strong></td>
-            <td><span class="pill bad">${ri === 0 ? "KEEP" : "EXTRA"}</span></td>
-            ${uploadRowCellsHtml(r)}
-          </tr>`);
+          html.push(`<tr>${detailRowCellsHtml(r, gi, ri, g.count)}</tr>`);
         });
       });
-      document.getElementById("dupBody").innerHTML = html.join("");
+      document.getElementById("dupBody").innerHTML = html.join("")
+        || `<tr><td colspan="${colCount}" class="note">No duplicate lines.</td></tr>`;
+      document.getElementById("dupAgreementDetail").scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
+
+    function renderAgreementList() {
+      const list = filteredAgreementDups();
+      document.getElementById("dupMeta").textContent =
+        `Showing ${list.length} agreement(s) with duplicates` +
+        (list.length !== result.agreementDups.length ? ` of ${result.agreementDups.length}` : "") +
+        ` · click a row to see where duplicates are`;
+
+      document.getElementById("dupAgrBody").innerHTML = list.map((a) => `
+        <tr class="agr-row" data-open-agr="${escapeHtml(a.club)}|${escapeHtml(a.agreement)}">
+          <td><strong>${escapeHtml(a.agreement)}</strong></td>
+          <td>${escapeHtml(a.club)}<div class="note">${escapeHtml(a.clubName || "")}</div></td>
+          <td>${escapeHtml(a.member)}</td>
+          <td class="bad">${a.dupGroups}</td>
+          <td class="bad">${a.dupRows}</td>
+          <td class="bad">${a.extra}</td>
+          <td><button class="btn ghost" type="button" data-open-agr-btn="${escapeHtml(a.club)}|${escapeHtml(a.agreement)}">Open</button></td>
+        </tr>
+      `).join("") || `<tr><td colspan="7" class="note">No agreements with duplicates for this filter.</td></tr>`;
+
+      function bindOpen(el) {
+        const raw = el.getAttribute("data-open-agr") || el.getAttribute("data-open-agr-btn");
+        if (!raw) return;
+        const pipe = raw.indexOf("|");
+        const club = raw.slice(0, pipe);
+        const agreement = raw.slice(pipe + 1);
+        openAgreementDetail(club, agreement);
+      }
+      document.querySelectorAll("[data-open-agr]").forEach((tr) => {
+        tr.addEventListener("click", (e) => {
+          if (e.target.closest("button")) return;
+          bindOpen(tr);
+        });
+      });
+      document.querySelectorAll("[data-open-agr-btn]").forEach((btn) => {
+        btn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          bindOpen(btn);
+        });
+      });
+    }
+
+    function renderDups() {
+      if (selectedDupAgreement) {
+        openAgreementDetail(selectedDupAgreement.club, selectedDupAgreement.agreement);
+      } else {
+        showAgreementList();
+      }
     }
 
     function renderClubDetail(code) {
@@ -834,7 +994,7 @@
         panel.classList.add("hidden");
         return;
       }
-      const colCount = QA_HEADERS.length + UPLOAD_HEADERS.length;
+      const colCount = DETAIL_HEADERS.length;
       panel.classList.remove("hidden");
       panel.innerHTML = `
         <div class="head">
@@ -850,23 +1010,23 @@
         <div class="meta" style="margin-bottom:8px">
           Duplicate groups: <strong class="${club.dupGroups ? "bad" : "ok"}">${club.dupGroups}</strong> ·
           Extra rows: <strong class="${club.dupExtra ? "bad" : "ok"}">${club.dupExtra}</strong>
-          · same upload columns
+          · limited columns on screen (export has full fields)
         </div>
         <div class="table-wrap" style="max-height:420px">
           <table>
             <thead>
-              <tr>${[...QA_HEADERS, ...UPLOAD_HEADERS].map((h) => `<th>${escapeHtml(h)}</th>`).join("")}</tr>
+              <tr>
+                <th>Agreement #</th>
+                ${DETAIL_HEADERS.map((h) => `<th>${escapeHtml(h)}</th>`).join("")}
+              </tr>
             </thead>
             <tbody>
               ${club.groups.length ? club.groups.map((g, gi) => g.rows.map((r, ri) => `
                 <tr>
-                  <td>G${gi + 1}</td>
-                  <td>${ri + 1} / ${g.count}</td>
-                  <td><strong>${r.sheetRow}</strong></td>
-                  <td><span class="pill bad">${ri === 0 ? "KEEP" : "EXTRA"}</span></td>
-                  ${uploadRowCellsHtml(r)}
+                  <td><strong>${escapeHtml(r.agreement)}</strong></td>
+                  ${detailRowCellsHtml(r, gi, ri, g.count)}
                 </tr>
-              `).join("")).join("") : `<tr><td colspan="${colCount}" class="note">No duplicates in this club.</td></tr>`}
+              `).join("")).join("") : `<tr><td colspan="${colCount + 1}" class="note">No duplicates in this club.</td></tr>`}
             </tbody>
           </table>
         </div>`;
@@ -912,8 +1072,9 @@
       }
       let groups = result.groups;
       if (opts.clubCode) groups = groups.filter((g) => g.club === opts.clubCode);
-      // Prefer current Duplicates-tab filter when exporting from main buttons
-      if (!opts.clubCode && !opts.ignoreFilter) {
+      if (opts.agreement) groups = groups.filter((g) => g.agreement === opts.agreement);
+      // Prefer current Duplicates-tab filter when exporting from list buttons
+      if (!opts.clubCode && !opts.agreement && !opts.ignoreFilter) {
         groups = filteredDupGroups();
       }
       if (!groups.length) {
@@ -952,9 +1113,23 @@
     }
 
     document.querySelectorAll(".tab").forEach((t) => t.addEventListener("click", () => showTab(t.dataset.tab)));
-    document.getElementById("dupClub").addEventListener("change", renderDups);
-    document.getElementById("dupView").addEventListener("change", renderDups);
-    document.getElementById("dupSearch").addEventListener("input", renderDups);
+    document.getElementById("dupClub").addEventListener("change", () => {
+      selectedDupAgreement = null;
+      renderDups();
+    });
+    document.getElementById("dupSearch").addEventListener("input", () => {
+      selectedDupAgreement = null;
+      renderDups();
+    });
+    document.getElementById("dupBackBtn").addEventListener("click", () => showAgreementList());
+    document.getElementById("exportAgrDupBtn").addEventListener("click", () => {
+      if (!selectedDupAgreement) return;
+      exportDuplicates({
+        clubCode: selectedDupAgreement.club,
+        agreement: selectedDupAgreement.agreement,
+        scopeLabel: selectedDupAgreement.agreement,
+      });
+    });
     document.getElementById("clubShow").addEventListener("change", renderClubs);
     document.getElementById("clubSearch").addEventListener("input", renderClubs);
 
@@ -965,11 +1140,13 @@
       el.parentElement.title = "Open Duplicates tab";
       el.parentElement.addEventListener("click", () => {
         if (!result) return;
+        selectedDupAgreement = null;
         showTab("dups");
+        renderDups();
       });
     });
 
-    exportBtn.addEventListener("click", () => exportDuplicates());
+    exportBtn.addEventListener("click", () => exportDuplicates({ ignoreFilter: true }));
     exportDupBtn.addEventListener("click", () => exportDuplicates());
   </script>
 </body>

@@ -187,7 +187,7 @@
     <h1>EFT Allocation</h1>
     <p class="sub">
       Step 1 — upload EFT Allocation (EFT / Tax / Combined Summary checks).<br />
-      Step 2 — upload Royalty Report + Upgraded Club List (PFAQ) for Gross Invoice validation vs Tax Summary.
+      Step 2 — upload Royalty Report + PF PFAQ Club Association List for Gross Invoice validation vs Tax Summary.
     </p>
 
     <!-- STEP 1: EFT -->
@@ -214,7 +214,7 @@
           <div class="kpi"><div class="l">Summary checks</div><div class="v" id="kChecks">—</div></div>
           <div class="kpi"><div class="l">Passed</div><div class="v ok" id="kPass">—</div></div>
           <div class="kpi"><div class="l">Failed</div><div class="v bad" id="kFail">—</div></div>
-          <div class="kpi"><div class="l">Club invoice mismatches</div><div class="v warn" id="kClub">—</div></div>
+          <div class="kpi"><div class="l">Club mismatches</div><div class="v warn" id="kClub">—</div></div>
         </div>
       </div>
 
@@ -227,8 +227,8 @@
       <div class="card">
         <div class="collapse-head" id="clubDiffToggle" title="Click to expand / collapse">
           <div>
-            <h2 class="section-title" style="margin:0">Club-wise difference — Top Invoice vs Recap Gross</h2>
-            <div class="note" id="clubDiffHint">Click header to expand / collapse</div>
+            <h2 class="section-title" style="margin:0">Club-wise difference</h2>
+            <div class="note" id="clubDiffHint">Top Invoice vs Recap Gross · Recap Delinquent / Total Collected vs EFT</div>
           </div>
           <div class="collapse-toggle" id="clubDiffChevron">▾</div>
         </div>
@@ -241,10 +241,10 @@
               <thead>
                 <tr>
                   <th>Club</th>
-                  <th>Top Invoice</th>
-                  <th>Recap Gross</th>
-                  <th>EFT Gross</th>
-                  <th>Diff (Top − Recap)</th>
+                  <th>Check</th>
+                  <th>Left</th>
+                  <th>Right</th>
+                  <th>Diff</th>
                 </tr>
               </thead>
               <tbody id="clubBody"></tbody>
@@ -262,7 +262,9 @@
         Club-by-club comparison uses <strong>Tax Summary only</strong>.
         Gross Invoices ↔ Royalty “Dues Gross Invoice”;
         Pre-Tax Gross Invoices ↔ Royalty “Pre Tax Dues”.
-        Differences that match the PFAQ upgraded club list are treated as <span class="pill expected">Expected</span>.
+        Differences that match the <strong>PF PFAQ Club Association List</strong>
+        (PF Club # or PFAQ Club #) are treated as <span class="pill expected">Expected</span>.
+        Gaps not on that list are <span class="pill bad">Unexpected</span>.
       </p>
       <div class="upload-grid">
         <div class="upload-box">
@@ -271,9 +273,9 @@
           <div class="meta" id="royaltyMeta">Waiting for Royalty file…</div>
         </div>
         <div class="upload-box">
-          <h3>Upgraded Club List (PFAQ)</h3>
+          <h3>PF PFAQ Club Association List</h3>
           <input id="pfaqFile" type="file" accept=".xlsx,.xls,.xlsm" />
-          <div class="meta" id="pfaqMeta">Required — marks expected invoice gaps</div>
+          <div class="meta" id="pfaqMeta">Required — marks expected invoice gaps (PF # + PFAQ #)</div>
         </div>
       </div>
       <div class="upload-row" style="margin-top:12px">
@@ -310,15 +312,15 @@
         </div>
         <div class="kpis" style="margin-top:10px">
           <div class="kpi clickable" id="kpiExpected" title="Click to view expected gaps">
-            <div class="l">Expected gaps (upgraded clubs)</div>
+            <div class="l">Expected gaps (PFAQ list)</div>
             <div class="v expected" id="rkExp">—</div>
-            <div class="hint">Gaps on PFAQ / upgraded club list — treated as expected</div>
+            <div class="hint">Gaps on PF/PFAQ association list — treated as expected</div>
             <div class="nav">View expected →</div>
           </div>
           <div class="kpi clickable" id="kpiUnexpected" title="Click to view unexpected gaps">
             <div class="l">Unexpected gaps</div>
             <div class="v bad" id="rkUnexp">—</div>
-            <div class="hint">Gaps NOT on upgraded list — need review</div>
+            <div class="hint">Gaps NOT on association list — need review</div>
             <div class="nav">View unexpected →</div>
           </div>
           <div class="kpi clickable" id="kpiOnlyRoy" title="Click to view Royalty-only clubs">
@@ -338,7 +340,7 @@
 
       <div class="card" id="sectionAmtDiff">
         <div class="legend">
-          <span class="pill expected">Expected (upgraded / PFAQ)</span>
+          <span class="pill expected">Expected (PFAQ association)</span>
           <span class="pill bad">Unexpected difference</span>
           <span class="pill warn">Only in Royalty</span>
           <span class="pill info">Only in EFT</span>
@@ -377,7 +379,7 @@
         <div class="collapse-head" data-collapse="onlyRoy">
           <div>
             <h2 class="section-title" style="margin:0">Clubs only in Royalty Report</h2>
-            <div class="note">Present in Royalty, missing from EFT — with Upgraded List NOTE / Status when available</div>
+            <div class="note">Present in Royalty, missing from EFT — with PFAQ list NOTE / Status when available</div>
           </div>
           <div class="collapse-toggle">▾</div>
         </div>
@@ -390,7 +392,7 @@
                   <th>Club Name</th>
                   <th>Dues Gross</th>
                   <th>Pre Tax Dues</th>
-                  <th>On upgraded list?</th>
+                  <th>On PFAQ list?</th>
                   <th>NOTE</th>
                   <th>Club Status</th>
                   <th>Upgrade Date</th>
@@ -668,7 +670,10 @@
       if (clubs && clubs.length) {
         const parts = clubs.map((r) => {
           const code = clubCodeDisplay(r.club);
-          return `For Club ${code}, the Collection Success Recap shows ${money(r.recapGross)} and Dues Invoices / Top Invoice shows ${money(r.topInvoice)} (diff ${money(r.diff)}).`;
+          if (r.check === "Top Invoice vs Recap Gross") {
+            return `For Club ${code}, Top Invoice ${money(r.left)} vs Recap Gross ${money(r.right)} (diff ${money(r.diff)}).`;
+          }
+          return `For Club ${code}, ${r.check}: ${money(r.left)} vs ${money(r.right)} (diff ${money(r.diff)}).`;
         });
         clubNarrative = `<p class="actual">After analysis, issue found in these club(s):</p><ul class="club-list">${parts
           .map((p) => `<li class="actual">${p}</li>`)
@@ -769,6 +774,8 @@
       let clubName = rows[0]?.[0] != null ? String(rows[0][0]).trim() : "";
       let topInvoice = null;
       let recapGross = null;
+      let recapDelinquent = null;
+      let recapTotalCollected = null;
       let inRecap = false;
       for (const row of rows) {
         if (!row || row[0] == null) continue;
@@ -776,17 +783,41 @@
         const low = label.toLowerCase();
         if (low.startsWith("invoices for")) topInvoice = cellNum(row, 10);
         if (low === "collection success recap") inRecap = true;
-        if (inRecap && low === "gross invoices") {
-          recapGross = cellNum(row, 5);
-          break;
-        }
+        if (!inRecap) continue;
+        if (low === "gross invoices") recapGross = cellNum(row, 5);
+        else if (low === "delinquent recovery") recapDelinquent = cellNum(row, 5);
+        else if (low === "total collected in cycle") recapTotalCollected = cellNum(row, 5);
       }
-      return { clubName, topInvoice, recapGross };
+      return { clubName, topInvoice, recapGross, recapDelinquent, recapTotalCollected };
     }
 
-    function findClubMismatches(wb, eftGrossByCode) {
+    function parseEftClubsByCode(eftRows) {
+      // Club rows: Gross Total Amount col 10, Delinquent Total Amount col 21, Total Collected col 31
+      const byCode = new Map();
+      for (let i = 5; i < eftRows.length; i++) {
+        const row = eftRows[i];
+        const name = String(row?.[0] ?? "").trim();
+        if (!name || /^grand\s*total$/i.test(name)) continue;
+        const code = normalizeClubCode(name);
+        if (!code) continue;
+        byCode.set(code, {
+          club: name,
+          gross: cellNum(row, 10),
+          delinquent: cellNum(row, 21),
+          totalCollected: cellNum(row, 31),
+        });
+      }
+      return byCode;
+    }
+
+    function findClubMismatches(wb, eftByCode) {
       const skip = new Set(["Legend", "EFT Summary", "Tax Summary", "Combined Summary"]);
       const mismatches = [];
+      const pushDiff = (club, check, left, right) => {
+        const diff = Math.round((left - right) * 100) / 100;
+        if (Math.abs(diff) <= TOL) return;
+        mismatches.push({ club, check, left, right, diff });
+      };
       for (const sheetName of wb.SheetNames) {
         if (skip.has(sheetName)) continue;
         if (!/^\d+$/.test(String(sheetName).trim())) continue;
@@ -794,20 +825,27 @@
         const m = extractClubSheetMetrics(rows);
         const codeRaw = String(sheetName).trim();
         const codeNorm = normalizeClubCode(codeRaw);
-        const eftGross = eftGrossByCode.get(codeNorm) ?? eftGrossByCode.get(codeRaw) ?? 0;
+        const eft =
+          eftByCode.get(codeNorm) ||
+          eftByCode.get(codeRaw) ||
+          { club: "", gross: 0, delinquent: 0, totalCollected: 0 };
+        const clubLabel = m.clubName || eft.club || codeRaw;
         const top = m.topInvoice == null ? 0 : m.topInvoice;
-        const recap = m.recapGross == null ? eftGross : m.recapGross;
-        const diff = Math.round((top - recap) * 100) / 100;
-        if (Math.abs(diff) <= TOL) continue;
-        mismatches.push({
-          club: m.clubName || codeRaw,
-          topInvoice: top,
-          recapGross: recap,
-          eftGross,
-          diff,
-        });
+        const recapGross = m.recapGross == null ? eft.gross : m.recapGross;
+        pushDiff(clubLabel, "Top Invoice vs Recap Gross", top, recapGross);
+        if (m.recapDelinquent != null) {
+          pushDiff(clubLabel, "Delinquent Recovery Recap vs EFT", m.recapDelinquent, eft.delinquent);
+        }
+        if (m.recapTotalCollected != null) {
+          pushDiff(
+            clubLabel,
+            "Total Collected in Cycle Recap vs EFT",
+            m.recapTotalCollected,
+            eft.totalCollected
+          );
+        }
       }
-      mismatches.sort((a, b) => Math.abs(b.diff) - Math.abs(a.diff));
+      mismatches.sort((a, b) => Math.abs(b.diff) - Math.abs(a.diff) || String(a.club).localeCompare(String(b.club)));
       return mismatches;
     }
 
@@ -866,39 +904,151 @@
     }
 
     function parsePfaq(wb) {
-      const preferred = wb.SheetNames.find((n) =>
-        n.toLowerCase().includes("upgraded club list")
+      // Prefer new PF/PFAQ Association List; fall back to legacy Upgraded Club List.
+      const assocSheet = wb.SheetNames.find(
+        (n) => /association/i.test(n) || /pfaq\s*assoc/i.test(n) || /^pfhq$/i.test(n.trim())
       );
-      const sheetName = preferred || findSheet(wb, ["PF Upgraded", "Club List"]) || wb.SheetNames[0];
+      const upgradedSheet = wb.SheetNames.find((n) => /upgraded\s*club\s*list/i.test(n));
+      const sheetName =
+        assocSheet ||
+        upgradedSheet ||
+        findSheet(wb, ["PF Upgraded", "Club List", "PFHQ"]) ||
+        wb.SheetNames[0];
       const rows = sheetRows(wb, sheetName);
-      const header = (rows[0] || []).map((h) => String(h ?? "").trim().toLowerCase());
-      const idx = {
-        club: header.findIndex((h) => h === "club number" || h === "club #"),
-        name: header.findIndex((h) => h === "club name"),
-        company: header.findIndex((h) => h.includes("company")),
-        note: header.findIndex((h) => h === "note" || h === "notes" || h.includes("note")),
-        upgrade: header.findIndex((h) => h.includes("upgrade")),
-        onRr: header.findIndex((h) => h === "on rr" || h.includes("on rr")),
-      };
-      if (idx.club < 0) {
-        idx.club = header.findIndex((h) => h.includes("club") && h.includes("number"));
+
+      let headerIdx = -1;
+      let header = [];
+      for (let i = 0; i < Math.min(rows.length, 40); i++) {
+        const labels = (rows[i] || []).map((h) => String(h ?? "").trim().toLowerCase());
+        const hasPfClub = labels.some(
+          (h) => h === "pf club #" || h === "pf club#" || (h.includes("pf club") && h.includes("#") && !h.includes("pfaq"))
+        );
+        const hasPfaqClub = labels.some((h) => h.includes("pfaq club") && h.includes("#"));
+        const hasClubNumber = labels.some(
+          (h) => h === "club number" || h === "club #" || (h.includes("club") && h.includes("number"))
+        );
+        if (hasPfClub || hasPfaqClub || hasClubNumber) {
+          headerIdx = i;
+          header = labels;
+          break;
+        }
       }
-      if (idx.club < 0) idx.club = 0;
+      if (headerIdx < 0) {
+        throw new Error(
+          'PFAQ file: header row not found (expect "PF CLUB #" / "PFAQ CLUB #" or "Club Number").'
+        );
+      }
+
+      const pfClubCols = [];
+      const pfaqClubCols = [];
+      const legacyClubCols = [];
+      header.forEach((h, i) => {
+        if (!h) return;
+        if (h.includes("pfaq club") && h.includes("#")) pfaqClubCols.push(i);
+        else if (h === "pf club #" || h === "pf club#" || (h.includes("pf club") && h.includes("#")))
+          pfClubCols.push(i);
+        else if (h === "club number" || h === "club #" || (h.includes("club") && h.includes("number")))
+          legacyClubCols.push(i);
+      });
+
+      const nameIdx = header.findIndex(
+        (h) =>
+          h === "pf club name" ||
+          h === "club name" ||
+          (h.includes("club name") && !h.includes("pfaq") && !h.includes("asso"))
+      );
+      const pfaqNameIdx = header.findIndex(
+        (h) => h.includes("pfaq club name") || (h.includes("club name") && h.includes("asso"))
+      );
+      const companyIdx = header.findIndex((h) => h === "company" || h.includes("company"));
+      const noteIdx = header.findIndex((h) => h === "note" || h === "notes" || h.includes("note"));
+      const upgradeIdx = header.findIndex(
+        (h) =>
+          h.includes("upgrade") ||
+          (h.includes("pf date") && h.includes("ignite")) ||
+          (h.includes("date moving") && !h.includes("pfaq"))
+      );
+      const pfaqUpgradeIdx = header.findIndex(
+        (h) => h.includes("pfaq date") || (h.includes("date moving") && h.includes("pfaq"))
+      );
+      const activeIdx = header.findIndex((h) => h === "active");
+      const commerceIdx = header.findIndex((h) => h.includes("commerce"));
+
+      const clubCols =
+        pfClubCols.length || pfaqClubCols.length
+          ? [...pfClubCols, ...pfaqClubCols]
+          : legacyClubCols.length
+            ? legacyClubCols
+            : [0];
 
       const map = new Map();
-      for (let i = 1; i < rows.length; i++) {
+      const upsert = (code, meta) => {
+        if (!code) return;
+        if (!map.has(code)) {
+          map.set(code, { code, onList: true, ...meta });
+          return;
+        }
+        const cur = map.get(code);
+        if (!cur.name && meta.name) cur.name = meta.name;
+        if (!cur.note && meta.note) cur.note = meta.note;
+        if ((!cur.upgradeDate || cur.upgradeDate === "—") && meta.upgradeDate) {
+          cur.upgradeDate = meta.upgradeDate;
+        }
+        if (!cur.status && meta.status) cur.status = meta.status;
+        if (!cur.company && meta.company) cur.company = meta.company;
+      };
+
+      for (let i = headerIdx + 1; i < rows.length; i++) {
         const r = rows[i];
-        const code = normalizeClubCode(r?.[idx.club]);
-        if (!code) continue;
-        map.set(code, {
-          code,
-          onList: true,
-          name: idx.name >= 0 ? String(r?.[idx.name] ?? "") : "",
-          company: idx.company >= 0 ? String(r?.[idx.company] ?? "") : "",
-          note: idx.note >= 0 ? String(r?.[idx.note] ?? "").trim() : "",
-          upgradeDate: idx.upgrade >= 0 ? formatUpgradeDate(r?.[idx.upgrade]) : "—",
-          status: "",
-        });
+        if (!r) continue;
+
+        const statusParts = [];
+        if (activeIdx >= 0 && r[activeIdx] != null && String(r[activeIdx]).trim() !== "") {
+          statusParts.push(`Active:${String(r[activeIdx]).trim()}`);
+        }
+        if (commerceIdx >= 0 && r[commerceIdx] != null && String(r[commerceIdx]).trim() !== "") {
+          statusParts.push(`InCommerce:${String(r[commerceIdx]).trim()}`);
+        }
+        const status = statusParts.join(" · ");
+        const company = companyIdx >= 0 ? String(r?.[companyIdx] ?? "").trim() : "";
+        const note = noteIdx >= 0 ? String(r?.[noteIdx] ?? "").trim() : "";
+
+        // Association list: index BOTH PF club # and PFAQ association club #
+        if (pfClubCols.length || pfaqClubCols.length) {
+          for (const col of pfClubCols) {
+            upsert(normalizeClubCode(r?.[col]), {
+              name: nameIdx >= 0 ? String(r?.[nameIdx] ?? "").trim() : "",
+              company,
+              note,
+              upgradeDate: upgradeIdx >= 0 ? formatUpgradeDate(r?.[upgradeIdx]) : "—",
+              status,
+              source: "PF CLUB #",
+            });
+          }
+          for (const col of pfaqClubCols) {
+            upsert(normalizeClubCode(r?.[col]), {
+              name: pfaqNameIdx >= 0 ? String(r?.[pfaqNameIdx] ?? "").trim() : "",
+              company,
+              note,
+              upgradeDate: pfaqUpgradeIdx >= 0 ? formatUpgradeDate(r?.[pfaqUpgradeIdx]) : "—",
+              status,
+              source: "PFAQ CLUB #",
+            });
+          }
+          continue;
+        }
+
+        // Legacy upgraded club list
+        for (const col of clubCols) {
+          upsert(normalizeClubCode(r?.[col]), {
+            name: nameIdx >= 0 ? String(r?.[nameIdx] ?? "").trim() : "",
+            company,
+            note,
+            upgradeDate: upgradeIdx >= 0 ? formatUpgradeDate(r?.[upgradeIdx]) : "—",
+            status: "",
+            source: "Club Number",
+          });
+        }
       }
 
       // Enrich with tier file Status when present in same workbook
@@ -915,15 +1065,16 @@
             const code =
               normalizeClubCode(posIdx >= 0 ? r?.[posIdx] : null) ||
               normalizeClubCode(pfIdx >= 0 ? r?.[pfIdx] : null);
-            if (!code) continue;
+            if (!code || !map.has(code)) continue;
             const status = String(r?.[statusIdx] ?? "").trim();
-            if (map.has(code)) {
-              map.get(code).status = status;
-            }
+            if (status) map.get(code).status = status;
           }
         }
       }
 
+      if (!map.size) {
+        throw new Error("PFAQ file: no club numbers found on the association / upgraded list sheet.");
+      }
       return { sheetName, map };
     }
 
@@ -1084,10 +1235,14 @@
         $("kFail").textContent = String(failCount);
 
         clubMismatchRows = [];
-        $("kClub").textContent = near(comb.topInvoice, comb.recapGross) ? "0" : "…";
-        $("clubBody").innerHTML = near(comb.topInvoice, comb.recapGross)
-          ? `<tr><td colspan="5" class="pass">Combined top matches Recap — club scan skipped.</td></tr>`
-          : `<tr><td colspan="5" class="note">Scanning club sheets…</td></tr>`;
+        const needClubScan =
+          !near(comb.topInvoice, comb.recapGross) ||
+          !near(comb.recapDelinquent, eft.delinquent) ||
+          !near(comb.recapTotalCollected, eft.totalCollected);
+        $("kClub").textContent = needClubScan ? "…" : "0";
+        $("clubBody").innerHTML = needClubScan
+          ? `<tr><td colspan="5" class="note">Scanning club sheets…</td></tr>`
+          : `<tr><td colspan="5" class="pass">No club-level scan needed — summary Top / Recap / EFT amounts align.</td></tr>`;
         $("results").classList.remove("hidden");
         setCollapsed($("clubDiffBody"), $("clubDiffChevron"), false);
 
@@ -1110,27 +1265,21 @@
         // Don't keep Run disabled during long club scan
         $("runBtn").disabled = false;
 
-        if (!near(comb.topInvoice, comb.recapGross)) {
-          $("clubMeta").textContent = "Scanning club sheets for Top Invoice vs Recap gaps…";
+        if (needClubScan) {
+          $("clubMeta").textContent =
+            "Scanning club sheets for Top vs Recap and Recap vs EFT (Delinquent / Total Collected)…";
           await new Promise((r) => setTimeout(r, 40));
           const wbFull = XLSX.read(fileBuffer, { type: "array" });
           const eftRows = sheetRows(wbFull, eftName);
-          const eftGrossByCode = new Map();
-          for (let i = 5; i < eftRows.length; i++) {
-            const row = eftRows[i];
-            const name = String(row?.[0] ?? "").trim();
-            if (!name || /^grand\s*total$/i.test(name)) continue;
-            const code = normalizeClubCode(name);
-            if (!code) continue;
-            eftGrossByCode.set(code, cellNum(row, 10));
-          }
-          clubMismatchRows = findClubMismatches(wbFull, eftGrossByCode);
+          const eftByCode = parseEftClubsByCode(eftRows);
+          clubMismatchRows = findClubMismatches(wbFull, eftByCode);
           clubMismatchRows.sort((a, b) => {
             const ca = normalizeClubCode(a.club) || a.club;
             const cb = normalizeClubCode(b.club) || b.club;
             const na = Number(ca);
             const nb = Number(cb);
-            if (Number.isFinite(na) && Number.isFinite(nb)) return na - nb;
+            if (Number.isFinite(na) && Number.isFinite(nb) && na !== nb) return na - nb;
+            if (a.check !== b.check) return String(a.check).localeCompare(String(b.check));
             return String(ca).localeCompare(String(cb), undefined, { numeric: true });
           });
         }
@@ -1141,22 +1290,26 @@
               .map(
                 (r) => `<tr>
               <td>${r.club}</td>
-              <td class="money">${money(r.topInvoice)}</td>
-              <td class="money">${money(r.recapGross)}</td>
-              <td class="money">${money(r.eftGross)}</td>
+              <td>${r.check}</td>
+              <td class="money">${money(r.left)}</td>
+              <td class="money">${money(r.right)}</td>
               <td class="money fail">${money(r.diff)}</td>
             </tr>`
               )
               .join("")
-          : `<tr><td colspan="5" class="pass">No club-level Top Invoice vs Recap mismatches.</td></tr>`;
+          : `<tr><td colspan="5" class="pass">No club-level mismatches for Top Invoice / Recap / EFT checks.</td></tr>`;
 
         $("clubMeta").textContent = clubMismatchRows.length
-          ? `${clubMismatchRows.length} club(s) · total gap ${money(
-              clubMismatchRows.reduce((s, r) => s + r.diff, 0)
-            )} · Combined top − Recap = ${money(comb.topInvoice - comb.recapGross)}`
-          : near(comb.topInvoice, comb.recapGross)
-            ? "Combined top Invoice matches Recap Gross — club scan skipped."
-            : "All good on club Top vs Recap.";
+          ? `${clubMismatchRows.length} mismatch row(s) · total absolute gap ${money(
+              clubMismatchRows.reduce((s, r) => s + Math.abs(r.diff), 0)
+            )} · Combined Delinq Recap − EFT = ${money(
+              comb.recapDelinquent - eft.delinquent
+            )} · Collected Recap − EFT = ${money(
+              comb.recapTotalCollected - eft.totalCollected
+            )}`
+          : needClubScan
+            ? "Summary showed a gap, but no club sheet differences were found within $0.02."
+            : "Summary Top / Recap / EFT amounts align — club scan skipped.";
         $("exportClubCsvBtn").disabled = clubMismatchRows.length === 0;
         setCollapsed($("clubDiffBody"), $("clubDiffChevron"), clubMismatchRows.length === 0);
 
@@ -1172,14 +1325,14 @@
 
     $("exportClubCsvBtn").addEventListener("click", () => {
       if (!clubMismatchRows.length) return;
-      const header = ["Club", "Top Invoice", "Recap Gross", "EFT Gross", "Diff (Top-Recap)"];
+      const header = ["Club", "Check", "Left", "Right", "Diff"];
       const lines = [header.join(",")].concat(
         clubMismatchRows.map((r) =>
           [
             `"${String(r.club).replaceAll('"', '""')}"`,
-            r.topInvoice,
-            r.recapGross,
-            r.eftGross,
+            `"${String(r.check).replaceAll('"', '""')}"`,
+            r.left,
+            r.right,
             r.diff,
           ].join(",")
         )
@@ -1262,7 +1415,8 @@
         const wb = XLSX.read(buf, { type: "array" });
         const parsed = parsePfaq(wb);
         pfaqByCode = parsed.map;
-        $("pfaqMeta").textContent = `${file.name} · ${parsed.sheetName} · ${pfaqByCode.size} clubs`;
+        $("pfaqMeta").textContent =
+          `${file.name} · ${parsed.sheetName} · ${pfaqByCode.size} club code(s) (PF # + PFAQ #)`;
         updateRoyaltyRunEnabled();
       } catch (err) {
         pfaqByCode = new Map();
@@ -1281,7 +1435,7 @@
         return;
       }
       if (!pfaqByCode.size) {
-        alert("Upload Upgraded Club List (PFAQ) — required to mark expected gaps.");
+        alert("Upload PF PFAQ Club Association List — required to mark expected gaps.");
         return;
       }
 
@@ -1359,7 +1513,7 @@
 
       const flagPill = (row) =>
         row.isPfaq
-          ? `<span class="pill expected">Expected (upgraded)</span>`
+          ? `<span class="pill expected">Expected (PFAQ list)</span>`
           : `<span class="pill bad">Unexpected</span>`;
 
       $("amtDiffBodyRows").innerHTML = amountDiffs.length
@@ -1382,7 +1536,7 @@
         : `<tr><td colspan="8" class="pass">No amount differences between Tax Summary and Royalty.</td></tr>`;
 
       $("amtDiffMeta").textContent = amountDiffs.length
-        ? `${amountDiffs.length} gap(s) · ${unexpected.length} unexpected · ${expected.length} expected (upgraded) · sorted by club #`
+        ? `${amountDiffs.length} gap(s) · ${unexpected.length} unexpected · ${expected.length} expected (PFAQ list) · sorted by club #`
         : "All overlapping clubs match within $0.02";
 
       $("onlyRoyRows").innerHTML = onlyRoyalty.length
@@ -1426,7 +1580,7 @@
         ? onlyTax
             .map((r) => {
               const pill = r.isPfaq
-                ? `<span class="pill expected">Upgraded</span>`
+                ? `<span class="pill expected">On PFAQ list</span>`
                 : `<span class="pill info">EFT only</span>`;
               return `<tr class="row-only-tax">
               <td>${pill}</td>
@@ -1570,7 +1724,7 @@
       $("pfaqFile").value = "";
       $("meta").textContent = "Waiting for EFT file…";
       $("royaltyMeta").textContent = "Waiting for Royalty file…";
-      $("pfaqMeta").textContent = "Required — marks expected invoice gaps";
+      $("pfaqMeta").textContent = "Required — marks expected invoice gaps (PF # + PFAQ #)";
       $("runBtn").disabled = true;
       $("royaltyRunBtn").disabled = true;
       $("exportClubCsvBtn").disabled = true;

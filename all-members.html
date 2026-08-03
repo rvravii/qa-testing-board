@@ -1,0 +1,848 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>All Members — ABC Insights QA</title>
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+  <style>
+    :root {
+      --bg: #0b1220; --panel: #111827; --panel2: #0f172a; --line: #1f2937;
+      --text: #e5e7eb; --muted: #94a3b8; --accent: #38bdf8;
+      --ok: #22c55e; --bad: #ef4444; --warn: #f59e0b;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      background: radial-gradient(1200px 600px at 10% -10%, #1e293b 0%, var(--bg) 55%);
+      color: var(--text);
+    }
+    .wrap { max-width: 1320px; margin: 0 auto; padding: 28px 20px 60px; }
+    h1 { margin: 0 0 6px; font-size: 1.4rem; }
+    .sub { color: var(--muted); margin-bottom: 18px; font-size: 0.9rem; line-height: 1.5; }
+    .badge-local {
+      display: inline-block; margin-left: 8px; padding: 2px 8px; border-radius: 999px;
+      background: #422006; color: #fdba74; font-size: 0.72rem; font-weight: 700; vertical-align: middle;
+    }
+    .card {
+      background: linear-gradient(180deg, var(--panel), var(--panel2));
+      border: 1px solid var(--line); border-radius: 14px; padding: 16px; margin-bottom: 14px;
+    }
+    .upload-row { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+    .btn {
+      background: var(--accent); color: #082f49; border: 0; border-radius: 10px;
+      padding: 10px 14px; font-weight: 700; cursor: pointer;
+    }
+    .btn.ghost { background: transparent; color: var(--text); border: 1px solid var(--line); }
+    .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+    .meta, .note { color: var(--muted); font-size: 0.84rem; line-height: 1.45; }
+    .meta { margin-top: 8px; }
+    .kpis { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; margin-top: 12px; }
+    .kpi { background: #0b1324; border: 1px solid var(--line); border-radius: 12px; padding: 12px; }
+    .kpi .l { color: var(--muted); font-size: 0.75rem; font-weight: 600; }
+    .kpi .v { font-size: 1.15rem; font-weight: 800; margin-top: 4px; }
+    .kpi .hint { color: var(--muted); font-size: 0.7rem; margin-top: 6px; line-height: 1.3; }
+    .ok { color: var(--ok); } .bad { color: var(--bad); } .warn { color: var(--warn); }
+    table { width: 100%; border-collapse: collapse; font-size: 0.84rem; }
+    th, td { padding: 8px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+    th { color: var(--muted); font-weight: 600; position: sticky; top: 0; background: #0f172a; }
+    .money { font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .hidden { display: none; }
+    .section-title { margin: 0 0 8px; font-size: 1.02rem; }
+    .pill { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 0.7rem; font-weight: 700; }
+    .pill.ok { background: #052e1a; color: #86efac; }
+    .pill.bad { background: #450a0a; color: #fca5a5; }
+    .pill.warn { background: #422006; color: #fcd34d; }
+    .tabs { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+    .tab {
+      background: #0b1324; border: 1px solid var(--line); color: var(--text);
+      border-radius: 999px; padding: 7px 12px; font-weight: 700; cursor: pointer; font-size: 0.8rem;
+    }
+    .tab.active { border-color: var(--accent); color: var(--accent); }
+    .filters { display: flex; flex-wrap: wrap; gap: 10px; align-items: end; margin: 10px 0; }
+    .field { display: flex; flex-direction: column; gap: 4px; min-width: 130px; }
+    .field label { color: var(--muted); font-size: 0.7rem; font-weight: 700; }
+    .field input, .field select {
+      background: #0b1324; color: var(--text); border: 1px solid var(--line);
+      border-radius: 8px; padding: 8px 10px; font-size: 0.84rem;
+    }
+    .banner {
+      border-radius: 12px; padding: 12px 14px; margin-bottom: 12px; border: 1px solid var(--line);
+      background: #0b1324; font-size: 0.88rem; line-height: 1.45;
+    }
+    .banner.fail { border-color: #7f1d1d; background: rgba(239, 68, 68, 0.08); }
+    .banner.pass { border-color: #14532d; background: rgba(34, 197, 94, 0.08); }
+    .formula {
+      background: #0b1324; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px;
+      font-size: 0.82rem; color: var(--muted); margin: 8px 0 4px; line-height: 1.45;
+    }
+    .formula strong { color: var(--text); }
+    .table-wrap { overflow: auto; max-height: 540px; margin-top: 8px; border: 1px solid var(--line); border-radius: 10px; }
+    .progress { height: 6px; background: #0b1324; border-radius: 999px; overflow: hidden; margin-top: 10px; }
+    .progress > div { height: 100%; background: var(--accent); width: 0%; }
+    .detail-box {
+      margin-top: 12px; border: 1px solid var(--line); border-radius: 12px;
+      background: #0b1324; padding: 14px;
+    }
+    .detail-box .head {
+      display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between;
+      margin-bottom: 10px;
+    }
+    .agr-row { cursor: pointer; }
+    .agr-row:hover td { background: rgba(56, 189, 248, 0.06); }
+    .breadcrumb { color: var(--muted); font-size: 0.84rem; margin: 0 0 10px; }
+    .breadcrumb button {
+      background: none; border: 0; color: var(--accent); font-weight: 700; cursor: pointer; padding: 0;
+      font-size: inherit;
+    }
+    .diff-val { background: rgba(245, 158, 11, 0.12); border-radius: 6px; padding: 2px 6px; }
+    @media (max-width: 900px) { .kpis { grid-template-columns: 1fr 1fr; } }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>All Members</h1>
+    <div class="sub">
+      Duplicate check for All Members Detail.
+      <strong>Primary + Secondary on the same agreement are normal</strong> (family members) — not duplicates.
+      Actual duplicate = same person appears more than once:
+      <strong>Agreement # + First Name + Last Name + Date of Birth</strong>.
+      Active / Inactive are split using <em>Member Active/Inactive</em>; Active-only files are fine.
+    </div>
+
+    <div class="card">
+      <div class="upload-row">
+        <input type="file" id="fileInput" accept=".xlsx,.xls" />
+        <button class="btn" id="runBtn" type="button" disabled>Run Validation</button>
+        <button class="btn ghost" id="exportBtn" type="button" disabled>Export duplicates</button>
+      </div>
+      <div class="meta" id="fileMeta">Upload All Members Detail (.xlsx). Active-only or Active+Inactive both supported.</div>
+      <div class="progress hidden" id="progressWrap"><div id="progressBar"></div></div>
+    </div>
+
+    <div class="kpis hidden" id="kpiRow">
+      <div class="kpi"><div class="l">Total rows</div><div class="v" id="kpiRows">—</div><div class="hint">Member detail lines</div></div>
+      <div class="kpi"><div class="l">Unique agreements</div><div class="v" id="kpiAgr">—</div><div class="hint">Distinct Agreement #</div></div>
+      <div class="kpi"><div class="l">Active</div><div class="v" id="kpiActive">—</div><div class="hint">Member Active/Inactive</div></div>
+      <div class="kpi"><div class="l">Inactive</div><div class="v" id="kpiInactive">—</div><div class="hint">Member Active/Inactive</div></div>
+      <div class="kpi"><div class="l">True person dups</div><div class="v" id="kpiDups">—</div><div class="hint">Same agr + name + DOB</div></div>
+    </div>
+
+    <div class="card hidden" id="resultsCard">
+      <div id="statusBanner" class="banner"></div>
+      <div class="tabs" id="tabBar"></div>
+
+      <div id="tabSummary" class="hidden">
+        <h2 class="section-title">Summary</h2>
+        <div class="formula">
+          <strong>Not a duplicate:</strong> same Agreement with Primary + Secondary (or multiple Secondaries) = family members at the gym.
+          <strong>Actual duplicate:</strong> same <em>Agreement # + First Name + Last Name + Date of Birth</em> on more than one row
+          (same person repeated — compare differing columns).
+        </div>
+        <div class="meta" id="summaryMeta"></div>
+        <div class="table-wrap" style="max-height:280px">
+          <table>
+            <thead>
+              <tr><th>Bucket</th><th>Rows</th><th>Unique agreements</th><th>Status breakdown</th></tr>
+            </thead>
+            <tbody id="summaryBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div id="tabActive" class="hidden">
+        <h2 class="section-title">Active members</h2>
+        <div class="meta" id="activeMeta"></div>
+        <div class="filters">
+          <div class="field" style="flex:1;min-width:160px">
+            <label>Search</label>
+            <input type="search" id="activeSearch" placeholder="agreement #, name, status…" />
+          </div>
+        </div>
+        <div class="table-wrap"><table><thead id="activeHead"></thead><tbody id="activeBody"></tbody></table></div>
+      </div>
+
+      <div id="tabInactive" class="hidden">
+        <h2 class="section-title">Inactive members</h2>
+        <div class="meta" id="inactiveMeta"></div>
+        <div class="filters">
+          <div class="field" style="flex:1;min-width:160px">
+            <label>Search</label>
+            <input type="search" id="inactiveSearch" placeholder="agreement #, name, status…" />
+          </div>
+        </div>
+        <div class="table-wrap"><table><thead id="inactiveHead"></thead><tbody id="inactiveBody"></tbody></table></div>
+      </div>
+
+      <div id="tabUnknown" class="hidden">
+        <h2 class="section-title">Other / blank Active-Inactive</h2>
+        <div class="meta" id="unknownMeta"></div>
+        <div class="table-wrap"><table><thead id="unknownHead"></thead><tbody id="unknownBody"></tbody></table></div>
+      </div>
+
+      <div id="tabDups" class="hidden">
+        <h2 class="section-title">Same-person duplicates</h2>
+        <div class="formula">
+          <strong>Step 1:</strong> Same person listed more than once (Agreement + Name + DOB).
+          Family Primary/Secondary rows are excluded.
+          <strong>Step 2:</strong> Click → column differences + limited row detail.
+        </div>
+        <div class="filters" id="dupListFilters">
+          <div class="field">
+            <label>Club</label>
+            <select id="dupClub"><option value="all">All clubs</option></select>
+          </div>
+          <div class="field">
+            <label>Active/Inactive mix</label>
+            <select id="dupMix">
+              <option value="all">All</option>
+              <option value="mixed">Active + Inactive together</option>
+              <option value="active">Active only</option>
+              <option value="inactive">Inactive only</option>
+            </select>
+          </div>
+          <div class="field" style="flex:1;min-width:160px">
+            <label>Search</label>
+            <input type="search" id="dupSearch" placeholder="agreement #, name…" />
+          </div>
+        </div>
+
+        <div id="dupAgreementList">
+          <div class="meta" id="dupMeta"></div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Agreement #</th>
+                  <th>Name</th>
+                  <th>DOB</th>
+                  <th>Type(s)</th>
+                  <th>Club</th>
+                  <th>Copies</th>
+                  <th>Active/Inactive</th>
+                  <th>Diff columns</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="dupAgrBody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div id="dupAgreementDetail" class="hidden">
+          <div class="breadcrumb">
+            <button type="button" id="dupBackBtn">← All person duplicates</button>
+            <span id="dupDetailCrumb"></span>
+          </div>
+          <div class="detail-box">
+            <div class="head">
+              <div>
+                <strong id="dupDetailTitle">—</strong>
+                <div class="note" id="dupDetailMeta"></div>
+              </div>
+              <button class="btn ghost" type="button" id="exportAgrBtn">Export this agreement</button>
+            </div>
+            <h3 class="section-title">Columns that differ</h3>
+            <div class="table-wrap" style="max-height:280px">
+              <table>
+                <thead><tr><th>Column</th><th id="diffValHeads"></th></tr></thead>
+                <tbody id="diffBody"></tbody>
+              </table>
+            </div>
+            <h3 class="section-title" style="margin-top:14px">Row detail (limited columns)</h3>
+            <div class="table-wrap" style="max-height:360px">
+              <table>
+                <thead id="dupRowHead"></thead>
+                <tbody id="dupRowBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const LIST_HEADERS = [
+      "Club #", "Agreement #", "Member #", "Type", "First Name", "Last Name", "Date of Birth",
+      "Status", "Member Active/Inactive", "Membership Type", "Email Address",
+    ];
+    const DETAIL_HEADERS = [
+      "Copy", "Type", "Club #", "Member #", "First Name", "Last Name", "Date of Birth", "Status",
+      "Member Active/Inactive", "Membership Type", "Payment Mode", "Agreement Type",
+      "Next Due Date", "Invoice Amount", "Balance",
+    ];
+
+    const fileInput = document.getElementById("fileInput");
+    const runBtn = document.getElementById("runBtn");
+    const exportBtn = document.getElementById("exportBtn");
+    const fileMeta = document.getElementById("fileMeta");
+    const progressWrap = document.getElementById("progressWrap");
+    const progressBar = document.getElementById("progressBar");
+
+    let fileBuf = null;
+    let fileName = "";
+    let result = null;
+    let selectedDup = null;
+
+    function blank(v) { return v == null ? "" : String(v).trim(); }
+    function escapeHtml(s) {
+      return String(s == null ? "" : s)
+        .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+    }
+    function clubCode(s) {
+      const m = String(s || "").trim().match(/^(\d+)/);
+      return m ? m[1].padStart(5, "0") : "";
+    }
+    function money(n) {
+      if (n == null || n === "" || Number.isNaN(Number(n))) return "—";
+      return Number(n).toLocaleString(undefined, { style: "currency", currency: "USD" });
+    }
+    function normDate(v) {
+      if (v == null || v === "") return "";
+      if (v instanceof Date && !Number.isNaN(v.getTime())) {
+        const y = v.getFullYear();
+        const m = String(v.getMonth() + 1).padStart(2, "0");
+        const d = String(v.getDate()).padStart(2, "0");
+        return `${y}-${m}-${d}`;
+      }
+      if (typeof v === "number" && XLSX.SSF) {
+        try {
+          const p = XLSX.SSF.parse_date_code(v);
+          if (p) return `${p.y}-${String(p.m).padStart(2, "0")}-${String(p.d).padStart(2, "0")}`;
+        } catch (_) {}
+      }
+      const s = String(v).trim();
+      if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+      return s;
+    }
+    function formatDue(iso) {
+      if (!iso || !/^\d{4}-\d{2}-\d{2}/.test(iso)) return iso || "";
+      const [y, m, d] = iso.slice(0, 10).split("-");
+      return `${m}/${d}/${y}`;
+    }
+    function displayVal(key, v) {
+      if (v == null || v === "") return "";
+      if (/date/i.test(key) || key === "Date of Birth") return formatDue(normDate(v)) || blank(v);
+      if (/amount|due|balance|invoice|payment|down payment/i.test(key) && typeof v === "number") return money(v);
+      return blank(v);
+    }
+    function setProgress(pct) {
+      progressWrap.classList.remove("hidden");
+      progressBar.style.width = Math.max(0, Math.min(100, pct)) + "%";
+    }
+    function sheetRows(wb, name) {
+      return XLSX.utils.sheet_to_json(wb.Sheets[name], { header: 1, defval: null, raw: true });
+    }
+    function normalizeActiveFlag(v) {
+      const s = blank(v).toLowerCase();
+      if (s === "active") return "Active";
+      if (s === "inactive") return "Inactive";
+      if (!s) return "Unknown";
+      return blank(v);
+    }
+
+    function findHeaderRow(rows) {
+      for (let i = 0; i < Math.min(rows.length, 40); i++) {
+        const cells = (rows[i] || []).map((c) => blank(c).toLowerCase());
+        const joined = cells.join(" | ");
+        if (joined.includes("agreement #") && joined.includes("member #") && (joined.includes("status") || joined.includes("member active"))) {
+          return i;
+        }
+      }
+      return -1;
+    }
+
+    function mapCols(headerRow) {
+      const cols = {};
+      const labels = [];
+      (headerRow || []).forEach((h, i) => {
+        const label = blank(h);
+        if (!label) return;
+        labels.push({ i, label, key: label.toLowerCase() });
+        cols[label.toLowerCase()] = i;
+      });
+      return { cols, labels };
+    }
+
+    function parseSheet(rows, sheetName) {
+      const h = findHeaderRow(rows);
+      if (h < 0) return null;
+      const { cols, labels } = mapCols(rows[h]);
+      if (cols["agreement #"] == null) return null;
+      const records = [];
+      for (let i = h + 1; i < rows.length; i++) {
+        const r = rows[i] || [];
+        const clubRaw = blank(r[cols["club #"]]);
+        if (/^total$/i.test(clubRaw)) continue;
+        const agreement = blank(r[cols["agreement #"]]);
+        if (!agreement) continue;
+        const fields = {};
+        for (const L of labels) {
+          let val = r[L.i];
+          if (/date/i.test(L.label) || L.label === "Date of Birth") val = normDate(val);
+          fields[L.label] = val;
+        }
+        const activeFlag = normalizeActiveFlag(fields["Member Active/Inactive"]);
+        records.push({
+          sheet: sheetName,
+          sheetRow: i + 1,
+          club: clubCode(clubRaw) || clubCode(sheetName) || clubRaw || "UNKNOWN",
+          clubName: blank(fields.Location) || sheetName,
+          agreement,
+          memberNo: blank(fields["Member #"]),
+          first: blank(fields["First Name"]),
+          last: blank(fields["Last Name"]),
+          dob: normDate(fields["Date of Birth"]),
+          status: blank(fields.Status),
+          activeFlag,
+          membershipType: blank(fields["Membership Type"]),
+          type: blank(fields.Type),
+          email: blank(fields["Email Address"]),
+          fields,
+          labels,
+        });
+      }
+      return { sheetName, labels, records };
+    }
+
+    function statusBreakdown(records) {
+      const map = new Map();
+      for (const r of records) {
+        const k = r.status || "(blank)";
+        map.set(k, (map.get(k) || 0) + 1);
+      }
+      return [...map.entries()].sort((a, b) => b[1] - a[1]);
+    }
+
+    function differingColumns(rows) {
+      if (!rows.length) return [];
+      const labels = rows[0].labels || [];
+      const diffs = [];
+      for (const L of labels) {
+        const vals = rows.map((r) => displayVal(L.label, r.fields[L.label]));
+        const uniq = [...new Set(vals.map((v) => v == null ? "" : String(v)))];
+        if (uniq.length > 1) {
+          diffs.push({ column: L.label, values: vals });
+        }
+      }
+      return diffs;
+    }
+
+    function buildAgreementDups(records) {
+      // Family: Primary + Secondary (and multiple Secondaries) share Agreement / often Member #
+      // but are different people — NOT duplicates.
+      // True duplicate = same person twice: Agreement + First + Last + DOB
+      const byKey = new Map();
+      for (const r of records) {
+        const id = [
+          r.club,
+          r.agreement,
+          (r.first || "").toLowerCase(),
+          (r.last || "").toLowerCase(),
+          r.dob || "",
+        ].join("|");
+        if (!byKey.has(id)) byKey.set(id, []);
+        byKey.get(id).push(r);
+      }
+      const out = [];
+      for (const [id, rows] of byKey) {
+        if (rows.length < 2) continue;
+        const sorted = rows.slice().sort((a, b) => a.sheetRow - b.sheetRow);
+        const flags = [...new Set(sorted.map((r) => r.activeFlag))];
+        const types = [...new Set(sorted.map((r) => r.type || "(blank)"))];
+        const diffs = differingColumns(sorted);
+        out.push({
+          id,
+          club: sorted[0].club,
+          clubName: sorted[0].clubName,
+          agreement: sorted[0].agreement,
+          type: types.join(" / "),
+          memberNo: sorted[0].memberNo,
+          member: `${sorted[0].first} ${sorted[0].last}`.trim(),
+          first: sorted[0].first,
+          last: sorted[0].last,
+          dob: sorted[0].dob,
+          rows: sorted,
+          count: sorted.length,
+          flags,
+          flagLabel: flags.join(" + "),
+          mix: flags.includes("Active") && flags.includes("Inactive") ? "mixed"
+            : (flags.length === 1 && flags[0] === "Active" ? "active"
+              : (flags.length === 1 && flags[0] === "Inactive" ? "inactive" : "other")),
+          diffs,
+          diffCount: diffs.length,
+        });
+      }
+      out.sort((a, b) => b.count - a.count || b.diffCount - a.diffCount || a.agreement.localeCompare(b.agreement));
+      return out;
+    }
+
+    function analyzeWorkbook(wb) {
+      const sheets = wb.SheetNames.filter((n) => !/^report\s*info$/i.test(n.trim()));
+      const all = [];
+      let labels = [];
+      for (const name of sheets) {
+        const parsed = parseSheet(sheetRows(wb, name), name);
+        if (!parsed || !parsed.records.length) continue;
+        all.push(...parsed.records);
+        if (!labels.length) labels = parsed.labels;
+      }
+      if (!all.length) {
+        throw new Error("No All Members rows found. Expect Agreement # / Member # columns.");
+      }
+      const active = all.filter((r) => r.activeFlag === "Active");
+      const inactive = all.filter((r) => r.activeFlag === "Inactive");
+      const unknown = all.filter((r) => r.activeFlag !== "Active" && r.activeFlag !== "Inactive");
+      const dups = buildAgreementDups(all);
+      const uniqueAgr = new Set(all.map((r) => r.agreement)).size;
+      const clubs = [...new Set(all.map((r) => r.club))].sort((a, b) => Number(a) - Number(b) || a.localeCompare(b));
+      return {
+        fileName, labels, records: all, active, inactive, unknown, dups, uniqueAgr, clubs,
+        activeBreakdown: statusBreakdown(active),
+        inactiveBreakdown: statusBreakdown(inactive),
+      };
+    }
+
+    fileInput.addEventListener("change", async () => {
+      const f = fileInput.files && fileInput.files[0];
+      fileBuf = null; fileName = ""; result = null; selectedDup = null;
+      runBtn.disabled = true; exportBtn.disabled = true;
+      document.getElementById("resultsCard").classList.add("hidden");
+      document.getElementById("kpiRow").classList.add("hidden");
+      if (!f) {
+        fileMeta.textContent = "Upload All Members Detail (.xlsx).";
+        return;
+      }
+      fileName = f.name;
+      fileMeta.textContent = `Selected: ${f.name} (${Math.round(f.size / 1024)} KB) — click Run Validation.`;
+      fileBuf = await f.arrayBuffer();
+      runBtn.disabled = false;
+    });
+
+    runBtn.addEventListener("click", async () => {
+      if (!fileBuf) return;
+      runBtn.disabled = true;
+      setProgress(8);
+      try {
+        setProgress(25);
+        const wb = XLSX.read(fileBuf, { type: "array", cellDates: true });
+        setProgress(70);
+        result = analyzeWorkbook(wb);
+        setProgress(100);
+        fillClubFilter();
+        renderAll();
+        exportBtn.disabled = !result.dups.length;
+        fileMeta.textContent = `Loaded ${fileName} · ${result.records.length.toLocaleString()} rows · ${result.clubs.length} club(s)`;
+      } catch (err) {
+        console.error(err);
+        fileMeta.textContent = "Error: " + (err && err.message ? err.message : String(err));
+        alert(fileMeta.textContent);
+      } finally {
+        runBtn.disabled = !fileBuf;
+        setTimeout(() => progressWrap.classList.add("hidden"), 400);
+      }
+    });
+
+    function fillClubFilter() {
+      document.getElementById("dupClub").innerHTML = [`<option value="all">All clubs</option>`]
+        .concat(result.clubs.map((c) => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`))
+        .join("");
+    }
+
+    function buildTabs() {
+      const tabs = [
+        { id: "summary", label: "1. Summary" },
+        { id: "active", label: `2. Active (${result.active.length})`, show: true },
+        { id: "inactive", label: `3. Inactive (${result.inactive.length})`, show: true },
+      ];
+      if (result.unknown.length) tabs.push({ id: "unknown", label: `Other (${result.unknown.length})`, show: true });
+      tabs.push({ id: "dups", label: `Duplicates (${result.dups.length})` });
+      document.getElementById("tabBar").innerHTML = tabs.map((t, i) =>
+        `<button class="tab${i === 0 ? " active" : ""}" data-tab="${t.id}" type="button">${escapeHtml(t.label)}</button>`
+      ).join("");
+      document.querySelectorAll("#tabBar .tab").forEach((t) => {
+        t.addEventListener("click", () => showTab(t.dataset.tab));
+      });
+    }
+
+    function showTab(id) {
+      document.querySelectorAll("#tabBar .tab").forEach((t) => t.classList.toggle("active", t.dataset.tab === id));
+      ["summary", "active", "inactive", "unknown", "dups"].forEach((k) => {
+        const el = document.getElementById("tab" + k.charAt(0).toUpperCase() + k.slice(1));
+        if (el) el.classList.toggle("hidden", id !== k);
+      });
+    }
+
+    function renderAll() {
+      document.getElementById("resultsCard").classList.remove("hidden");
+      document.getElementById("kpiRow").classList.remove("hidden");
+      selectedDup = null;
+      document.getElementById("kpiRows").textContent = result.records.length.toLocaleString();
+      document.getElementById("kpiAgr").textContent = result.uniqueAgr.toLocaleString();
+      document.getElementById("kpiActive").textContent = result.active.length.toLocaleString();
+      document.getElementById("kpiInactive").textContent = result.inactive.length.toLocaleString();
+      document.getElementById("kpiDups").textContent = String(result.dups.length);
+      document.getElementById("kpiDups").className = "v " + (result.dups.length ? "bad" : "ok");
+
+      const banner = document.getElementById("statusBanner");
+      const parts = [];
+      parts.push(`Active <strong>${result.active.length.toLocaleString()}</strong>`);
+      if (result.inactive.length) parts.push(`Inactive <strong>${result.inactive.length.toLocaleString()}</strong>`);
+      else parts.push(`Inactive <strong>0</strong> <span class="note">(not in this file — OK)</span>`);
+      if (result.unknown.length) parts.push(`Other <strong class="warn">${result.unknown.length}</strong>`);
+      if (result.dups.length) {
+        banner.className = "banner fail";
+        banner.innerHTML = `<span class="pill bad">DUPLICATES</span> ${result.dups.length} same-person group(s) (Agreement + Name + DOB) · ${parts.join(" · ")}. Family Primary/Secondary is excluded.`;
+      } else {
+        banner.className = "banner pass";
+        banner.innerHTML = `<span class="pill ok">PASS</span> No same-person duplicates · Primary+Secondary family rows are OK · ${parts.join(" · ")}.`;
+      }
+
+      buildTabs();
+      renderSummary();
+      renderMemberList("active", result.active);
+      renderMemberList("inactive", result.inactive);
+      if (result.unknown.length) renderMemberList("unknown", result.unknown);
+      renderDups();
+      showTab(result.dups.length ? "dups" : "summary");
+    }
+
+    function renderSummary() {
+      document.getElementById("summaryMeta").textContent =
+        `${result.fileName} · ${result.records.length.toLocaleString()} rows · ${result.uniqueAgr.toLocaleString()} unique agreements · ${result.clubs.length} club(s)`;
+      function fmtBreak(br) {
+        return br.slice(0, 8).map(([k, n]) => `${escapeHtml(k)}: ${n}`).join(" · ") + (br.length > 8 ? " …" : "");
+      }
+      const rows = [
+        { name: "Active", recs: result.active, br: result.activeBreakdown },
+        { name: "Inactive", recs: result.inactive, br: result.inactiveBreakdown },
+      ];
+      if (result.unknown.length) {
+        rows.push({ name: "Other / blank", recs: result.unknown, br: statusBreakdown(result.unknown) });
+      }
+      document.getElementById("summaryBody").innerHTML = rows.map((r) => `
+        <tr>
+          <td><strong>${escapeHtml(r.name)}</strong>${r.recs.length === 0 ? ` <span class="note">(none in file)</span>` : ""}</td>
+          <td>${r.recs.length.toLocaleString()}</td>
+          <td>${new Set(r.recs.map((x) => x.agreement)).size.toLocaleString()}</td>
+          <td class="note">${r.recs.length ? fmtBreak(r.br) : "—"}</td>
+        </tr>
+      `).join("");
+    }
+
+    function limitedHeadersHtml() {
+      return LIST_HEADERS.map((h) => `<th>${escapeHtml(h)}</th>`).join("");
+    }
+    function limitedRowHtml(r) {
+      const map = {
+        "Club #": r.club,
+        "Agreement #": r.agreement,
+        "Member #": r.memberNo,
+        "Type": r.type,
+        "First Name": r.first,
+        "Last Name": r.last,
+        "Date of Birth": formatDue(r.dob),
+        "Status": r.status,
+        "Member Active/Inactive": r.activeFlag,
+        "Membership Type": r.membershipType,
+        "Email Address": r.email,
+      };
+      return LIST_HEADERS.map((h) => `<td>${escapeHtml(map[h] || "")}</td>`).join("");
+    }
+
+    function renderMemberList(kind, records) {
+      const head = document.getElementById(kind + "Head");
+      const body = document.getElementById(kind + "Body");
+      const meta = document.getElementById(kind + "Meta");
+      head.innerHTML = `<tr>${limitedHeadersHtml()}</tr>`;
+      if (!records.length) {
+        meta.textContent = `No ${kind} members in this upload — that is OK.`;
+        body.innerHTML = `<tr><td colspan="${LIST_HEADERS.length}" class="note">No rows for this bucket.</td></tr>`;
+        return;
+      }
+      const searchEl = document.getElementById(kind + "Search");
+      const q = searchEl ? searchEl.value.trim().toLowerCase() : "";
+      let list = records;
+      if (q) {
+        list = records.filter((r) =>
+          `${r.agreement} ${r.first} ${r.last} ${r.status} ${r.memberNo} ${r.email}`.toLowerCase().includes(q)
+        );
+      }
+      const max = 500;
+      meta.textContent = `Showing ${Math.min(list.length, max).toLocaleString()} of ${list.length.toLocaleString()} (cap ${max} on screen) · ${records.length.toLocaleString()} total in bucket`;
+      body.innerHTML = list.slice(0, max).map((r) => `<tr>${limitedRowHtml(r)}</tr>`).join("")
+        || `<tr><td colspan="${LIST_HEADERS.length}" class="note">No rows for filter.</td></tr>`;
+    }
+
+    function filteredDups() {
+      const club = document.getElementById("dupClub").value;
+      const mix = document.getElementById("dupMix").value;
+      const q = document.getElementById("dupSearch").value.trim().toLowerCase();
+      let list = result.dups.slice();
+      if (club !== "all") list = list.filter((d) => d.club === club);
+      if (mix !== "all") list = list.filter((d) => d.mix === mix);
+      if (q) list = list.filter((d) =>
+        `${d.agreement} ${d.member} ${d.club} ${d.type} ${d.dob}`.toLowerCase().includes(q)
+      );
+      return list;
+    }
+
+    function showDupList() {
+      selectedDup = null;
+      document.getElementById("dupAgreementList").classList.remove("hidden");
+      document.getElementById("dupAgreementDetail").classList.add("hidden");
+      document.getElementById("dupListFilters").classList.remove("hidden");
+      const list = filteredDups();
+      document.getElementById("dupMeta").textContent =
+        `Showing ${list.length} same-person duplicate group(s)` +
+        (list.length !== result.dups.length ? ` of ${result.dups.length}` : "") +
+        ` · family Primary/Secondary excluded`;
+      document.getElementById("dupAgrBody").innerHTML = list.map((d) => `
+        <tr class="agr-row" data-open-dup="${escapeHtml(d.id)}">
+          <td><strong>${escapeHtml(d.agreement)}</strong></td>
+          <td>${escapeHtml(d.member)}</td>
+          <td>${escapeHtml(formatDue(d.dob))}</td>
+          <td>${escapeHtml(d.type)}</td>
+          <td>${escapeHtml(d.club)}<div class="note">${escapeHtml(d.clubName)}</div></td>
+          <td class="bad">${d.count}</td>
+          <td>${escapeHtml(d.flagLabel)}</td>
+          <td class="${d.diffCount ? "warn" : "ok"}">${d.diffCount}</td>
+          <td><button class="btn ghost" type="button" data-open-dup-btn="${escapeHtml(d.id)}">Open</button></td>
+        </tr>
+      `).join("") || `<tr><td colspan="9" class="note">No same-person duplicates. Primary + Secondary family members on one agreement are not flagged.</td></tr>`;
+
+      function openId(raw) {
+        const d = result.dups.find((x) => x.id === raw);
+        if (d) openDupDetail(d);
+      }
+      document.querySelectorAll("[data-open-dup]").forEach((tr) => {
+        tr.addEventListener("click", (e) => {
+          if (e.target.closest("button")) return;
+          openId(tr.getAttribute("data-open-dup"));
+        });
+      });
+      document.querySelectorAll("[data-open-dup-btn]").forEach((btn) => {
+        btn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          openId(btn.getAttribute("data-open-dup-btn"));
+        });
+      });
+    }
+
+    function openDupDetail(d) {
+      selectedDup = d;
+      document.getElementById("dupAgreementList").classList.add("hidden");
+      document.getElementById("dupAgreementDetail").classList.remove("hidden");
+      document.getElementById("dupListFilters").classList.add("hidden");
+      document.getElementById("dupDetailCrumb").textContent = ` / ${d.agreement}`;
+      document.getElementById("dupDetailTitle").textContent =
+        `${d.agreement} — ${d.member || ""} (${formatDue(d.dob) || "no DOB"})`;
+      document.getElementById("dupDetailMeta").textContent =
+        `Club ${d.club} · ${d.count} copies · Type: ${d.type} · ${d.flagLabel} · ${d.diffCount} differing column(s)`;
+
+      const heads = d.rows.map((r, i) => `<th>Row ${i + 1} <span class="note">(Excel ${r.sheetRow})</span></th>`).join("");
+      document.getElementById("diffValHeads").innerHTML = heads;
+      document.getElementById("diffBody").innerHTML = d.diffs.length
+        ? d.diffs.map((diff) => `
+            <tr>
+              <td><strong>${escapeHtml(diff.column)}</strong></td>
+              ${diff.values.map((v) => `<td><span class="diff-val">${escapeHtml(v || "—")}</span></td>`).join("")}
+            </tr>
+          `).join("")
+        : `<tr><td colspan="${d.count + 1}" class="note">Rows match on all mapped columns (exact duplicate).</td></tr>`;
+
+      document.getElementById("dupRowHead").innerHTML = `<tr>${DETAIL_HEADERS.map((h) => `<th>${escapeHtml(h)}</th>`).join("")}</tr>`;
+      document.getElementById("dupRowBody").innerHTML = d.rows.map((r, i) => {
+        const map = {
+          Copy: `${i + 1} / ${d.count}`,
+          Type: r.type,
+          "Club #": r.club,
+          "Member #": r.memberNo,
+          "First Name": r.first,
+          "Last Name": r.last,
+          "Date of Birth": formatDue(r.dob),
+          Status: r.status,
+          "Member Active/Inactive": r.activeFlag,
+          "Membership Type": r.membershipType,
+          "Payment Mode": displayVal("Payment Mode", r.fields["Payment Mode"]),
+          "Agreement Type": displayVal("Agreement Type", r.fields["Agreement Type"]),
+          "Next Due Date": displayVal("Next Due Date", r.fields["Next Due Date"]),
+          "Invoice Amount": displayVal("Invoice Amount", r.fields["Invoice Amount"]),
+          Balance: displayVal("Balance", r.fields.Balance),
+        };
+        return `<tr>${DETAIL_HEADERS.map((h) => {
+          const v = map[h];
+          if (h === "Invoice Amount" || h === "Balance") return `<td class="money">${escapeHtml(v || "—")}</td>`;
+          return `<td>${escapeHtml(v || "")}</td>`;
+        }).join("")}</tr>`;
+      }).join("");
+      document.getElementById("dupAgreementDetail").scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
+
+    function renderDups() {
+      if (selectedDup) {
+        const fresh = result.dups.find((d) => d.id === selectedDup.id);
+        if (fresh) openDupDetail(fresh);
+        else showDupList();
+      } else showDupList();
+    }
+
+    function exportDuplicates(onlyId) {
+      if (!result || !result.dups.length) {
+        alert("No duplicate agreements to export.");
+        return;
+      }
+      let list = onlyId ? result.dups.filter((d) => d.id === onlyId) : filteredDups();
+      if (!list.length) {
+        alert("No rows for current filter.");
+        return;
+      }
+      const header = ["Agreement #", "Type", "Member #", "Club #", "Copy", "Excel Row", "Diff columns", "First Name", "Last Name", "Status", "Member Active/Inactive", "Membership Type", "Email Address", "Payment Mode", "Agreement Type", "Invoice Amount", "Balance"];
+      const aoa = [header];
+      const diffSheet = [["Agreement #", "Type", "Member #", "Column", ...Array.from({ length: 5 }, (_, i) => `Row ${i + 1}`)]];
+      list.forEach((d) => {
+        d.rows.forEach((r, i) => {
+          aoa.push([
+            d.agreement, d.type, d.memberNo, d.club, `${i + 1}/${d.count}`, r.sheetRow, d.diffCount,
+            r.first, r.last, r.status, r.activeFlag, r.membershipType, r.email,
+            displayVal("Payment Mode", r.fields["Payment Mode"]),
+            displayVal("Agreement Type", r.fields["Agreement Type"]),
+            displayVal("Invoice Amount", r.fields["Invoice Amount"]),
+            displayVal("Balance", r.fields.Balance),
+          ]);
+        });
+        d.diffs.forEach((diff) => {
+          const row = [d.agreement, d.type, d.memberNo, diff.column, ...diff.values];
+          while (row.length < 9) row.push("");
+          diffSheet.push(row.slice(0, 9));
+        });
+      });
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), "Duplicate rows");
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(diffSheet), "Column diffs");
+      const scope = onlyId ? onlyId.replace("|", "-") : "all";
+      XLSX.writeFile(wb, `all-members-duplicates-${scope}-${new Date().toISOString().slice(0, 10)}.xlsx`);
+    }
+
+    document.getElementById("activeSearch").addEventListener("input", () => renderMemberList("active", result.active));
+    document.getElementById("inactiveSearch").addEventListener("input", () => renderMemberList("inactive", result.inactive));
+    ["dupClub", "dupMix"].forEach((id) => {
+      document.getElementById(id).addEventListener("change", () => { selectedDup = null; renderDups(); });
+    });
+    document.getElementById("dupSearch").addEventListener("input", () => { selectedDup = null; renderDups(); });
+    document.getElementById("dupBackBtn").addEventListener("click", () => showDupList());
+    document.getElementById("exportAgrBtn").addEventListener("click", () => {
+      if (selectedDup) exportDuplicates(selectedDup.id);
+    });
+    exportBtn.addEventListener("click", () => exportDuplicates());
+    document.getElementById("kpiDups").parentElement.style.cursor = "pointer";
+    document.getElementById("kpiDups").parentElement.addEventListener("click", () => {
+      if (!result) return;
+      showTab("dups");
+    });
+  </script>
+</body>
+</html>

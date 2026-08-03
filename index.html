@@ -535,6 +535,7 @@
         </button>
         <div class="nav-group" id="group-insight">
           <button class="nav-child" data-page="aje-standard" type="button">Accounting Journal Entries_ standard report</button>
+          <button class="nav-child" data-page="all-members" type="button">All Members</button>
         </div>
 
         <div class="nav-section">Dashboards</div>
@@ -609,9 +610,11 @@
         desc: "Insight report group. Open a child report from the left panel.",
         cards: [
           { id: "aje-standard", title: "Accounting Journal Entries_ standard report", desc: "AJE Debit/Credit balance + DRDR section cross-check (club-wise)." },
+          { id: "all-members", title: "All Members", desc: "Active/Inactive split + same-person duplicate check (Agreement + Name + DOB). Family Primary/Secondary excluded." },
         ],
       },
       "aje-standard": { embed: "aje-standard.html?v=2" },
+      "all-members": { embed: "all-members.html?v=1" },
       dashboards: {
         kicker: "DASHBOARDS",
         title: "Dashboards",
@@ -676,7 +679,7 @@
       if (["drdr", "past-due-member", "pf-reports"].includes(page)) {
         document.querySelector('[data-toggle="pf"]').classList.add("active");
       }
-      if (["aje-standard", "insight-reports"].includes(page)) {
+      if (["aje-standard", "all-members", "insight-reports"].includes(page)) {
         document.querySelector('[data-toggle="insight"]').classList.add("active");
       }
     }
@@ -698,14 +701,14 @@
         frame = document.createElement("iframe");
         frame.className = "embed-frame";
         frame.title = page;
-        frame.src = src;
         embedHost.appendChild(frame);
         embedCache.set(page, frame);
-      } else if (frame.dataset.src !== src) {
-        // Force reload when embed URL/version changes (avoids stale cached report UI)
-        frame.src = src;
       }
-      frame.dataset.src = src;
+      // Always sync src so version bumps (?v=) reload the report (iframe cache otherwise keeps old UI)
+      if (frame.dataset.src !== src) {
+        frame.src = src;
+        frame.dataset.src = src;
+      }
       frame.classList.add("active");
     }
 

@@ -166,6 +166,8 @@
     .ticket .actual { color: #de350b; font-weight: 600; }
     .ticket .expected { color: #006644; font-weight: 600; }
     .ticket .muted { color: #5e6c84; font-size: 13px; }
+    .ticket .body-text { color: #172b4d; font-weight: 400; line-height: 1.55; margin: 8px 0; }
+    .ticket .body-text strong { font-weight: 700; }
     .ticket .club-list { margin: 8px 0 0; padding-left: 18px; }
     .ticket-edit {
       display: grid; grid-template-columns: 120px 1fr; gap: 8px; align-items: center;
@@ -197,11 +199,13 @@
         <input id="file" type="file" accept=".xlsx,.xls,.xlsm" />
         <button class="btn" id="runBtn" disabled>Run EFT checks</button>
         <button class="btn bug" id="createBugBtn" disabled title="Enabled when EFT / Tax / Combined Summary differences are found">Create Bug</button>
+        <button class="btn ghost" id="genCommentBtn" disabled title="Drafts a team QA comment from validation findings">Generate Comment</button>
         <button class="btn ghost" id="clearBtn">Clear all</button>
       </div>
       <div class="meta" id="meta">Waiting for EFT file…</div>
       <div class="note" id="bugHint" style="margin-top:8px">
-        <strong>Create Bug</strong> activates after Run EFT checks when EFT / Tax / Combined Summary differences are found.
+        <strong>Create Bug</strong> activates when summary / club differences are found.
+        <strong>Generate Comment</strong> drafts a team update from the same findings (including Royalty when run).
       </div>
       <div class="note" style="margin-top:8px">
         Reads <strong>EFT Summary</strong>, <strong>Tax Summary</strong>, and <strong>Combined Summary</strong> only.
@@ -456,6 +460,33 @@
     </div>
   </div>
 
+  <div class="modal-backdrop" id="commentModal" role="dialog" aria-modal="true" aria-labelledby="commentModalTitle">
+    <div class="modal">
+      <div class="modal-head">
+        <h2 id="commentModalTitle">QA Comment — EFT Allocation</h2>
+        <div class="modal-actions">
+          <button class="btn ghost" type="button" id="copyCommentBtn">Copy comment</button>
+          <button class="btn ghost" type="button" id="closeCommentBtn">Close</button>
+        </div>
+      </div>
+      <div class="modal-body">
+        <div class="ticket-edit">
+          <label for="commentEnv">Environment</label>
+          <input id="commentEnv" value="PROD" />
+          <label for="commentWorkspace">Workspace</label>
+          <input id="commentWorkspace" value="PF HQ" />
+          <label for="commentDate">Period</label>
+          <input id="commentDate" value="" />
+          <label for="commentTicketUrl">Defect link</label>
+          <input id="commentTicketUrl" placeholder="https://…/browse/DNADW-#### (optional)" />
+          <label for="commentAssignee">Mention</label>
+          <input id="commentAssignee" placeholder="@Name (optional)" />
+        </div>
+        <div class="ticket" id="commentTicket"></div>
+      </div>
+    </div>
+  </div>
+
   <script>
     const TOL = 0.02;
     const $ = (id) => document.getElementById(id);
@@ -645,33 +676,342 @@
       return code.padStart(4, "0");
     }
 
+    function buildQaCommentHtml({
+      env,
+      workspace,
+      dateLabel,
+      checks,
+      clubs,
+      values,
+      file,
+      royalty,
+      ticketUrl,
+      assignee,
+    }) {
+      const failed = (checks || []).filter((c) => !near(c.leftVal, c.rightVal));
+      const issues = classifyBugIssues(failed, clubs);
+      const v = values || {};
+      const top = v.topInvoice ?? 0;
+      const recap = v.recapGross ?? 0;
+      const eft = v.eftGross ?? 0;
+      const tax = v.taxGross ?? 0;
+      const recapMatchesEft = near(recap, eft);
+      const recapMatchesTax = near(recap, tax);
+
+      const delinqClubs = (clubs || []).filter((r) => r.check === "Delinquent Recovery Recap vs EFT");
+      const collectedClubs = (clubs || []).filter((r) => r.check === "Total Collected in Cycle Recap vs EFT");
+      const topClubRows = (clubs || []).filter((r) => r.check === "Top Invoice vs Recap Gross");
+
+      const period = dateLabel || "the selected period";
+      const parts = [];
+
+      parts.push(`<p class="body-text">Hi Team,</p>`);
+      parts.push(
+        `<p class="body-text">I am looking at the <strong>EFT Allocation</strong> report for <strong>${period}</strong> (${env} · ${workspace}), and I identified the following after QA validation.</p>`
+      );
+
+      if (issues.includes("delinquent")) {
+        const L = v.recapDelinquent ?? failed.find((c) => /delinquent/i.test(c.name))?.leftVal ?? 0;
+        const R = v.eftDelinquent ?? failed.find((c) => /delinquent/i.test(c.name))?.rightVal ?? 0;
+        parts.push(
+          `<p class="body-text">There is a discrepancy in <strong>Delinquent Recovery</strong> between Collection Success Recap and EFT Summary:</p>
+           <ul class="club-list body-text">
+             <li><strong>Recap · Delinquent Recovery:</strong> ${money(L)}</li>
+             <li><strong>EFT · Delinquent Recovery:</strong> ${money(R)}</li>
+             <li><strong>Diff:</strong> <span class="actual">${money(L - R)}</span></li>
+           </ul>`
+        );
+      }
+
+      if (issues.includes("collected")) {
+        const L =
+          v.recapTotalCollected ?? failed.find((c) => /total collected/i.test(c.name))?.leftVal ?? 0;
+        const R =
+          v.eftTotalCollected ?? failed.find((c) => /total collected/i.test(c.name))?.rightVal ?? 0;
+        parts.push(
+          `<p class="body-text">There is a discrepancy in <strong>Total Collected in Cycle</strong> between Collection Success Recap and EFT Summary:</p>
+           <ul class="club-list body-text">
+             <li><strong>Recap · Total Collected in Cycle:</strong> ${money(L)}</li>
+             <li><strong>EFT · Total Collected:</strong> ${money(R)}</li>
+             <li><strong>Diff:</strong> <span class="actual">${money(L - R)}</span></li>
+           </ul>`
+        );
+      }
+
+      if (issues.includes("gross")) {
+        parts.push(
+          `<p class="body-text">There is a discrepancy in the <strong>Combined Summary</strong> tab between <strong>Dues Invoices</strong> and <strong>Collection Success Recap</strong>:</p>
+           <p class="body-text">The Total Amount in Dues Invoices is not matching with the Gross Invoices in Collection Success Recap.</p>
+           <ul class="club-list body-text">
+             <li><strong>Dues Invoice Amount (Combined Summary):</strong> ${money(top)}</li>
+             <li><strong>Gross Invoices in Collection Success Recap:</strong> ${money(recap)}</li>
+             <li><strong>Diff:</strong> <span class="actual">${money(top - recap)}</span></li>
+           </ul>`
+        );
+        if (recapMatchesEft && recapMatchesTax) {
+          parts.push(
+            `<p class="body-text">However, the Gross Invoices in Collection Success Recap is matching correctly with both <strong>EFT Summary</strong> (${money(
+              eft
+            )}) and <strong>Tax Summary</strong> (${money(tax)}).</p>`
+          );
+        }
+      }
+
+      if (issues.includes("eft_tax_gross")) {
+        parts.push(
+          `<p class="body-text"><strong>Gross Invoices</strong> do not match between EFT Summary (${money(
+            eft
+          )}) and Tax Summary (${money(tax)}). Diff: <span class="actual">${money(eft - tax)}</span>.</p>`
+        );
+      }
+
+      if (issues.includes("other") && failed.length) {
+        parts.push(
+          `<p class="body-text">Summary validations found difference(s):</p>
+           <ul class="club-list body-text">${failed
+             .map(
+               (c) =>
+                 `<li><strong>${c.name}</strong>: ${money(c.leftVal)} vs ${money(c.rightVal)} (diff ${money(
+                   (c.leftVal || 0) - (c.rightVal || 0)
+                 )})</li>`
+             )
+             .join("")}</ul>`
+        );
+      }
+
+      if (!issues.length) {
+        parts.push(
+          `<p class="body-text">EFT / Tax / Combined Summary validations are in good shape — no summary mismatches within $0.02.</p>`
+        );
+      }
+
+      const hasClubDetail = delinqClubs.length || collectedClubs.length || topClubRows.length;
+      if (hasClubDetail) {
+        parts.push(`<p class="body-text"><strong>🔍 Club-level analysis:</strong></p>`);
+        if (delinqClubs.length) {
+          parts.push(
+            `<p class="body-text">${delinqClubs
+              .map((r) => {
+                const code = clubCodeDisplay(r.club);
+                return `For Club <strong>${code}</strong>, Delinquent Recovery Recap shows ${money(
+                  r.left
+                )} vs EFT ${money(r.right)} (diff ${money(r.diff)})`;
+              })
+              .join(". ")}.</p>`
+          );
+        }
+        if (collectedClubs.length) {
+          parts.push(
+            `<p class="body-text">${collectedClubs
+              .map((r) => {
+                const code = clubCodeDisplay(r.club);
+                return `For Club <strong>${code}</strong>, Total Collected Recap shows ${money(
+                  r.left
+                )} vs EFT ${money(r.right)} (diff ${money(r.diff)})`;
+              })
+              .join(". ")}.</p>`
+          );
+        }
+        if (topClubRows.length) {
+          parts.push(
+            `<p class="body-text">${topClubRows
+              .map((r) => {
+                const code = clubCodeDisplay(r.club);
+                return `For Club <strong>${code}</strong>, Collection Success Recap Gross shows ${money(
+                  r.right
+                )} whereas Dues Invoices shows ${money(r.left)} (diff ${money(r.diff)})`;
+              })
+              .join(". ")}.</p>`
+          );
+          const zeroDues = topClubRows.filter((r) => Math.abs(r.left) <= TOL);
+          if (zeroDues.length && zeroDues.length === topClubRows.length) {
+            parts.push(
+              `<p class="body-text">In these club sheet(s), Dues Invoices is showing <strong>$0.00</strong> while Recap still has amounts — Dues Invoices appears to be missing data for the impacted clubs.</p>`
+            );
+          }
+        }
+      }
+
+      if (ticketUrl) {
+        const safeUrl = String(ticketUrl).replace(/"/g, "&quot;");
+        const mention = assignee ? ` ${assignee}` : "";
+        parts.push(
+          `<p class="body-text">Raised defect ticket for this <a href="${safeUrl}" target="_blank" rel="noopener">${safeUrl}</a> — please look into it${mention}.</p>`
+        );
+      } else if (assignee) {
+        parts.push(`<p class="body-text">Please look into it ${assignee}.</p>`);
+      }
+
+      parts.push(`<p class="body-text"><strong>📌 Conclusion:</strong></p>`);
+      if (issues.includes("delinquent") || issues.includes("collected")) {
+        const bits = [];
+        if (issues.includes("delinquent")) bits.push("Delinquent Recovery");
+        if (issues.includes("collected")) bits.push("Total Collected in Cycle");
+        const clubEx = [...delinqClubs, ...collectedClubs]
+          .slice(0, 6)
+          .map((r) => `Club ${clubCodeDisplay(r.club)}`);
+        const uniqClubs = [...new Set(clubEx)];
+        parts.push(
+          `<p class="body-text">This suggests a mismatch in <strong>${bits.join(
+            " / "
+          )}</strong> between Collection Success Recap and EFT Summary${
+            uniqClubs.length ? ` (impacted club(s): ${uniqClubs.join(" and ")})` : ""
+          }. Please review Combined Summary Recap vs EFT Summary for these metrics.</p>`
+        );
+      } else if (issues.includes("gross") && recapMatchesEft && recapMatchesTax) {
+        parts.push(
+          `<p class="body-text">This suggests that the data is correctly reflected in EFT Summary and Tax Summary, and flows properly into Collection Success Recap. However, the <strong>Dues Invoices</strong> section seems to be missing data for certain clubs${
+            topClubRows.length
+              ? ` (e.g., ${topClubRows
+                  .slice(0, 6)
+                  .map((r) => `Club ${clubCodeDisplay(r.club)}`)
+                  .join(" and ")})`
+              : ""
+          }.</p>`
+        );
+      } else if (failed.length || (clubs && clubs.length)) {
+        parts.push(
+          `<p class="body-text">Please review the failed check(s) and club-level differences above for the impacted metric(s).</p>`
+        );
+      } else {
+        parts.push(`<p class="body-text">No Combined Summary / EFT / Tax discrepancies were found in this run.</p>`);
+      }
+
+      const roy = royalty || null;
+      parts.push(`<p class="body-text"><strong>Gross Invoices Validation with Royalty Report:</strong></p>`);
+      if (roy && roy.ran) {
+        const exp = roy.expectedCount || 0;
+        const unexp = roy.unexpectedCount || 0;
+        const gaps = roy.gapCount || 0;
+        if (!gaps) {
+          parts.push(
+            `<p class="body-text">Tax Summary Gross Invoices have been validated against the PF Royalty Report. We are in good shape — overlapping clubs match within $0.02.</p>`
+          );
+        } else if (unexp === 0 && exp > 0) {
+          parts.push(
+            `<p class="body-text">Tax Summary Gross Invoices have been validated against the PF Royalty Report (Insights dataset). We are in good shape, everything's looking expected.</p>
+             <p class="body-text">Expected variances are observed for <strong>${exp}</strong> PFAQ association / parent club gap(s), which are known and acceptable.</p>`
+          );
+        } else {
+          parts.push(
+            `<p class="body-text">Tax Summary vs Royalty Report: <strong>${gaps}</strong> invoice amount gap(s) — <strong>${exp}</strong> expected (PFAQ association list) and <strong>${unexp}</strong> unexpected (need review).</p>`
+          );
+          if (roy.unexpectedSample && roy.unexpectedSample.length) {
+            parts.push(
+              `<ul class="club-list body-text">${roy.unexpectedSample
+                .map(
+                  (r) =>
+                    `<li>${r.club}: Tax ${money(r.taxGross)} vs Royalty ${money(r.royGross)} (diff ${money(
+                      r.grossDiff
+                    )})</li>`
+                )
+                .join("")}</ul>`
+            );
+          }
+        }
+      } else {
+        parts.push(
+          `<p class="body-text muted">Royalty Report + PF PFAQ Club Association List not run yet — upload them and click Run Royalty validation to include that section automatically.</p>`
+        );
+      }
+
+      parts.push(`<p class="body-text">Thank you!!</p>`);
+
+      return `<div class="section">${parts.join("\n")}</div>`;
+    }
+
+    function classifyBugIssues(failed, clubs) {
+      const failedNames = (failed || []).map((c) => c.name);
+      const clubChecks = (clubs || []).map((r) => r.check);
+      const failHas = (re) => failedNames.some((n) => re.test(n));
+      const clubHas = (name) => clubChecks.includes(name);
+
+      const issues = [];
+      if (failHas(/delinquent/i) || clubHas("Delinquent Recovery Recap vs EFT")) {
+        issues.push("delinquent");
+      }
+      if (failHas(/total collected/i) || clubHas("Total Collected in Cycle Recap vs EFT")) {
+        issues.push("collected");
+      }
+      // Dues / Recap Gross only — do NOT treat bare "Gross Invoices: EFT vs Tax" as this
+      if (
+        failHas(/combined top invoice/i) ||
+        failHas(/^collection success recap gross/i) ||
+        clubHas("Top Invoice vs Recap Gross")
+      ) {
+        issues.push("gross");
+      }
+      if (failHas(/^gross invoices:\s*eft/i)) {
+        issues.push("eft_tax_gross");
+      }
+      if (!issues.length && ((failed && failed.length) || (clubs && clubs.length))) {
+        issues.push("other");
+      }
+      return issues;
+    }
+
+    function bugHeadingForIssues(issues, failed, clubs, dateLabel) {
+      const period = dateLabel ? ` — ${dateLabel}` : "";
+      const labels = [];
+      if (issues.includes("delinquent")) labels.push("Delinquent Recovery mismatch (Recap vs EFT)");
+      if (issues.includes("collected")) labels.push("Total Collected in Cycle mismatch (Recap vs EFT)");
+      if (issues.includes("gross")) labels.push("Dues Invoices vs Collection Success Recap Gross mismatch");
+      if (issues.includes("eft_tax_gross")) labels.push("EFT Summary vs Tax Summary Gross Invoices mismatch");
+      if (issues.includes("other")) {
+        const first = failed?.[0]?.name || clubs?.[0]?.check || "validation mismatch";
+        labels.push(first);
+      }
+      if (!labels.length) return `EFT Allocation — validation findings${period}`;
+      if (labels.length === 1) return `EFT Allocation — ${labels[0]}${period}`;
+      return `EFT Allocation — ${labels.join(" + ")}${period}`;
+    }
+
     function buildBugTicketHtml({ env, workspace, dateLabel, checks, clubs, values, file }) {
       const failed = (checks || []).filter((c) => !near(c.leftVal, c.rightVal));
-      const topVsRecap = values
-        ? {
-            top: values.topInvoice,
-            recap: values.recapGross,
-            eft: values.eftGross,
-            tax: values.taxGross,
-            gap: (values.topInvoice || 0) - (values.recapGross || 0),
-          }
-        : null;
+      const issues = classifyBugIssues(failed, clubs);
+      const heading = bugHeadingForIssues(issues, failed, clubs, dateLabel);
+      const v = values || {};
 
       const failedLines = failed.length
         ? failed
             .map(
               (c) =>
-                `<li><strong>${c.name}</strong>: ${c.leftLabel} ${money(c.leftVal)} vs ${c.rightLabel} ${money(c.rightVal)} (diff ${money((c.leftVal || 0) - (c.rightVal || 0))})</li>`
+                `<li><strong>${c.name}</strong>: ${c.leftLabel} ${money(c.leftVal)} vs ${c.rightLabel} ${money(
+                  c.rightVal
+                )} (diff ${money((c.leftVal || 0) - (c.rightVal || 0))})</li>`
             )
             .join("")
         : "<li>No failed summary checks.</li>";
 
+      const relevantClubChecks = new Set();
+      if (issues.includes("delinquent")) relevantClubChecks.add("Delinquent Recovery Recap vs EFT");
+      if (issues.includes("collected")) relevantClubChecks.add("Total Collected in Cycle Recap vs EFT");
+      if (issues.includes("gross") || issues.includes("eft_tax_gross")) {
+        relevantClubChecks.add("Top Invoice vs Recap Gross");
+      }
+      if (!relevantClubChecks.size) {
+        (clubs || []).forEach((r) => relevantClubChecks.add(r.check));
+      }
+      const relevantClubs = (clubs || []).filter((r) => relevantClubChecks.has(r.check));
+
       let clubNarrative = "";
-      if (clubs && clubs.length) {
-        const parts = clubs.map((r) => {
+      if (relevantClubs.length) {
+        const parts = relevantClubs.map((r) => {
           const code = clubCodeDisplay(r.club);
           if (r.check === "Top Invoice vs Recap Gross") {
-            return `For Club ${code}, Top Invoice ${money(r.left)} vs Recap Gross ${money(r.right)} (diff ${money(r.diff)}).`;
+            return `For Club ${code}, Dues Invoices / Top Invoice ${money(r.left)} vs Collection Success Recap Gross ${money(
+              r.right
+            )} (diff ${money(r.diff)}).`;
+          }
+          if (r.check === "Delinquent Recovery Recap vs EFT") {
+            return `For Club ${code}, Delinquent Recovery Recap ${money(r.left)} vs EFT Delinquent Recovery ${money(
+              r.right
+            )} (diff ${money(r.diff)}).`;
+          }
+          if (r.check === "Total Collected in Cycle Recap vs EFT") {
+            return `For Club ${code}, Total Collected in Cycle Recap ${money(r.left)} vs EFT Total Collected ${money(
+              r.right
+            )} (diff ${money(r.diff)}).`;
           }
           return `For Club ${code}, ${r.check}: ${money(r.left)} vs ${money(r.right)} (diff ${money(r.diff)}).`;
         });
@@ -680,19 +1020,143 @@
           .join("")}</ul>`;
       }
 
-      const amountBlock =
-        topVsRecap && Math.abs(topVsRecap.gap) > TOL
-          ? `<p class="actual">The Total Amount in Dues Invoices (${money(
-              topVsRecap.top
-            )}) is not matching with the Gross Invoices in Collection Success Recap (${money(
-              topVsRecap.recap
-            )}). Gap = ${money(topVsRecap.gap)}.</p>
-             <p class="muted">EFT Summary Gross Invoices: ${money(topVsRecap.eft)} · Tax Summary Gross Invoices: ${money(
-              topVsRecap.tax
-            )} (these typically match Collection Success Recap Gross).</p>`
-          : `<p class="actual">Summary differences were found across EFT Summary / Tax Summary / Combined Summary validations.</p>`;
+      const actualBlocks = [];
+      if (issues.includes("delinquent")) {
+        const left = v.recapDelinquent;
+        const right = v.eftDelinquent;
+        const gap =
+          left != null && right != null
+            ? left - right
+            : failed.find((c) => /delinquent/i.test(c.name))
+              ? failed.find((c) => /delinquent/i.test(c.name)).leftVal -
+                failed.find((c) => /delinquent/i.test(c.name)).rightVal
+              : 0;
+        const L =
+          left != null
+            ? left
+            : failed.find((c) => /delinquent/i.test(c.name))?.leftVal ?? 0;
+        const R =
+          right != null
+            ? right
+            : failed.find((c) => /delinquent/i.test(c.name))?.rightVal ?? 0;
+        actualBlocks.push(
+          `<p class="actual">The <strong>Delinquent Recovery</strong> amount in Collection Success Recap (${money(
+            L
+          )}) is not matching with <strong>EFT Summary Delinquent Recovery</strong> (${money(R)}). Gap = ${money(
+            L - R
+          )}.</p>`
+        );
+      }
+      if (issues.includes("collected")) {
+        const L =
+          v.recapTotalCollected != null
+            ? v.recapTotalCollected
+            : failed.find((c) => /total collected/i.test(c.name))?.leftVal ?? 0;
+        const R =
+          v.eftTotalCollected != null
+            ? v.eftTotalCollected
+            : failed.find((c) => /total collected/i.test(c.name))?.rightVal ?? 0;
+        actualBlocks.push(
+          `<p class="actual">The <strong>Total Collected in Cycle</strong> amount in Collection Success Recap (${money(
+            L
+          )}) is not matching with <strong>EFT Summary Total Collected</strong> (${money(R)}). Gap = ${money(
+            L - R
+          )}.</p>`
+        );
+      }
+      if (issues.includes("gross")) {
+        const top = v.topInvoice ?? 0;
+        const recap = v.recapGross ?? 0;
+        actualBlocks.push(
+          `<p class="actual">The Total Amount in <strong>Dues Invoices</strong> (${money(
+            top
+          )}) is not matching with the <strong>Gross Invoices</strong> in Collection Success Recap (${money(
+            recap
+          )}). Gap = ${money(top - recap)}.</p>
+           <p class="muted">EFT Summary Gross Invoices: ${money(v.eftGross)} · Tax Summary Gross Invoices: ${money(
+            v.taxGross
+          )}.</p>`
+        );
+      }
+      if (issues.includes("eft_tax_gross")) {
+        actualBlocks.push(
+          `<p class="actual"><strong>Gross Invoices</strong> do not match between EFT Summary (${money(
+            v.eftGross
+          )}) and Tax Summary (${money(v.taxGross)}). Gap = ${money((v.eftGross || 0) - (v.taxGross || 0))}.</p>`
+        );
+      }
+      if (!actualBlocks.length) {
+        actualBlocks.push(
+          `<p class="actual">Summary / club differences were found across EFT Summary / Tax Summary / Combined Summary validations.</p>`
+        );
+      }
+
+      const steps = [
+        "Log in to the POWER BI.",
+        "Navigate to the <strong>EFT Allocation</strong> report in the corporate section.",
+        "Run the report for the above workspace.",
+        "Navigate to the <strong>Combined Summary</strong> and <strong>EFT Summary</strong> tabs.",
+      ];
+      if (issues.includes("delinquent")) {
+        steps.push(
+          "Compare <strong>Delinquent Recovery</strong> in Collection Success Recap (Combined Summary) with <strong>Delinquent Recovery</strong> on EFT Summary (Grand Total)."
+        );
+      }
+      if (issues.includes("collected")) {
+        steps.push(
+          "Compare <strong>Total Collected in Cycle</strong> in Collection Success Recap with <strong>Total Collected</strong> on EFT Summary (Grand Total)."
+        );
+      }
+      if (issues.includes("gross")) {
+        steps.push(
+          "Compare the <strong>Dues Invoice</strong> total amount with <strong>Gross Invoices</strong> in Collection Success Recap."
+        );
+        steps.push(
+          "Also compare EFT Summary and Tax Summary Gross Invoices against Combined Summary values."
+        );
+      }
+      if (issues.includes("eft_tax_gross")) {
+        steps.push(
+          "Compare <strong>Gross Invoices</strong> Grand Total on EFT Summary vs Tax Summary."
+        );
+      }
+      if (!issues.includes("delinquent") && !issues.includes("collected") && !issues.includes("gross") && !issues.includes("eft_tax_gross")) {
+        steps.push("Review the failed QA checks listed in Actual Result.");
+      }
+      if (relevantClubs.length) {
+        const codes = [...new Set(relevantClubs.map((r) => clubCodeDisplay(r.club)))].join(", ");
+        steps.push(`Navigate to the impacted club sheet(s): ${codes}; verify the same metric(s) at club level.`);
+      }
+
+      const expectedBits = [];
+      if (issues.includes("delinquent")) {
+        expectedBits.push(
+          "<strong>Delinquent Recovery</strong> in Collection Success Recap should match <strong>EFT Summary Delinquent Recovery</strong> (including club-level amounts)."
+        );
+      }
+      if (issues.includes("collected")) {
+        expectedBits.push(
+          "<strong>Total Collected in Cycle</strong> in Collection Success Recap should match <strong>EFT Summary Total Collected</strong> (including club-level amounts)."
+        );
+      }
+      if (issues.includes("gross")) {
+        expectedBits.push(
+          "<strong>Dues Invoices</strong> Total Amount should match <strong>Gross Invoices</strong> in Collection Success Recap, and align with EFT Summary / Tax Summary Gross Invoices."
+        );
+      }
+      if (issues.includes("eft_tax_gross")) {
+        expectedBits.push(
+          "<strong>EFT Summary Gross Invoices</strong> should match <strong>Tax Summary Gross Invoices</strong>."
+        );
+      }
+      if (!expectedBits.length) {
+        expectedBits.push(
+          "All compared Combined Summary / EFT Summary / Tax Summary amounts should match within $0.02."
+        );
+      }
 
       return `
+        <h3 class="section-title" style="margin-top:0">${heading}</h3>
         <h3>▾ Key details</h3>
         <div class="meta-block">
           <div><span class="label">Environment:</span> ${env}</div>
@@ -705,25 +1169,13 @@
         <div class="section">
           <div class="section-title">Steps to Reproduce:</div>
           <ol>
-            <li>Log in to the POWER BI.</li>
-            <li>Navigate to the <strong>EFT Allocation</strong> report in the corporate section.</li>
-            <li>Run the report for the above workspace.</li>
-            <li>Navigate to the <strong>Combined Summary</strong> tab.</li>
-            <li>Compare the <strong>Dues Invoice</strong> total amount with <strong>Gross Invoices</strong> for <strong>Collection Success Recap</strong>.</li>
-            <li>Also compare EFT Summary and Tax Summary Gross Invoices against Combined Summary values.</li>
-            ${
-              clubs && clubs.length
-                ? `<li>Navigate to the impacted club sheet(s): ${clubs
-                    .map((r) => clubCodeDisplay(r.club))
-                    .join(", ")}; there are also differences.</li>`
-                : ""
-            }
+            ${steps.map((s) => `<li>${s}</li>`).join("")}
           </ol>
         </div>
 
         <div class="section">
           <div class="section-title">Actual Result:</div>
-          ${amountBlock}
+          ${actualBlocks.join("\n")}
           <p class="actual">Failed QA checks:</p>
           <ul class="club-list actual">${failedLines}</ul>
           ${clubNarrative}
@@ -731,13 +1183,12 @@
 
         <div class="section">
           <div class="section-title">Expected Result:</div>
-          <p class="expected">The <strong>Dues Invoices</strong> Total Amount should match with the <strong>Gross Invoices</strong> in Collection Success Recap, and align with EFT Summary and Tax Summary. Additionally, individual club-level data should also match across all sections (Dues Invoices vs Collection Success Recap).</p>
+          <p class="expected">${expectedBits.join(" ")}</p>
         </div>
       `;
     }
 
-    function buildBugTicketText() {
-      const el = $("bugTicket");
+    function modalTextFrom(el) {
       if (!el) return "";
       return el.innerText.replace(/\n{3,}/g, "\n\n").trim();
     }
@@ -752,6 +1203,15 @@
 
     function renderBugTicket() {
       if (!lastBugContext) return;
+      const failed = (lastBugContext.checks || []).filter((c) => !near(c.leftVal, c.rightVal));
+      const issues = classifyBugIssues(failed, lastBugContext.clubs);
+      const heading = bugHeadingForIssues(
+        issues,
+        failed,
+        lastBugContext.clubs,
+        $("bugDate").value.trim() || lastBugContext.dateLabel
+      );
+      $("bugModalTitle").textContent = heading;
       $("bugTicket").innerHTML = buildBugTicketHtml({
         env: $("bugEnv").value.trim() || "PROD",
         workspace: $("bugWorkspace").value.trim() || "PF HQ",
@@ -763,11 +1223,56 @@
       });
     }
 
+    function openCommentModal() {
+      if (!lastBugContext) return;
+      const asOf = lastBugContext.asOf;
+      $("commentDate").value = lastBugContext.dateLabel || formatBugDate(asOf) || asOf || "";
+      if (!$("commentEnv").value.trim()) $("commentEnv").value = $("bugEnv").value.trim() || "PROD";
+      if (!$("commentWorkspace").value.trim()) $("commentWorkspace").value = $("bugWorkspace").value.trim() || "PF HQ";
+      renderCommentTicket();
+      $("commentModal").classList.add("open");
+    }
+
+    function renderCommentTicket() {
+      if (!lastBugContext) return;
+      $("commentTicket").innerHTML = buildQaCommentHtml({
+        env: $("commentEnv").value.trim() || "PROD",
+        workspace: $("commentWorkspace").value.trim() || "PF HQ",
+        dateLabel: $("commentDate").value.trim(),
+        checks: lastBugContext.checks,
+        clubs: lastBugContext.clubs,
+        values: lastBugContext.values,
+        file: lastBugContext.fileName,
+        royalty: lastBugContext.royalty,
+        ticketUrl: $("commentTicketUrl")?.value.trim() || "",
+        assignee: $("commentAssignee")?.value.trim() || "",
+      });
+    }
+
+    function refreshActionButtons() {
+      const ctx = lastBugContext;
+      const failed = ctx ? (ctx.checks || []).filter((c) => !near(c.leftVal, c.rightVal)).length : 0;
+      const clubs = ctx ? (ctx.clubs || []).length : 0;
+      const bugOn = Boolean(ctx && (failed > 0 || clubs > 0));
+      const commentOn = Boolean(ctx);
+      $("createBugBtn").disabled = !bugOn;
+      $("genCommentBtn").disabled = !commentOn;
+      if (!ctx) {
+        $("bugHint").textContent =
+          "Create Bug activates when summary / club differences are found. Generate Comment drafts a team update after EFT checks (Royalty fills in after Royalty validation).";
+      } else if (bugOn) {
+        $("bugHint").textContent =
+          "Differences found — Create Bug and Generate Comment are ready.";
+      } else {
+        $("bugHint").textContent =
+          "No summary/club failures — Create Bug stays off. Generate Comment is ready for a clean / Royalty update.";
+      }
+    }
+
     function setCreateBugEnabled(enabled) {
+      // Kept for clear/reset callers; prefer refreshActionButtons after runs.
       $("createBugBtn").disabled = !enabled;
-      $("bugHint").textContent = enabled
-        ? "Differences found — Create Bug is ready."
-        : "Create Bug activates when summary checks fail.";
+      if ($("genCommentBtn") && !lastBugContext) $("genCommentBtn").disabled = true;
     }
 
     function extractClubSheetMetrics(rows) {
@@ -1254,12 +1759,17 @@
             recapGross: comb.recapGross,
             eftGross: eft.invoice,
             taxGross: tax.gross,
+            recapDelinquent: comb.recapDelinquent,
+            eftDelinquent: eft.delinquent,
+            recapTotalCollected: comb.recapTotalCollected,
+            eftTotalCollected: eft.totalCollected,
           },
           asOf,
           dateLabel: formatBugDate(asOf),
           fileName,
+          royalty: null,
         };
-        setCreateBugEnabled(failCount > 0);
+        refreshActionButtons();
         updateRoyaltyRunEnabled();
         $("meta").textContent = `${fileName} · Tax clubs: ${tax.clubs.length} · summary done`;
         // Don't keep Run disabled during long club scan
@@ -1314,7 +1824,7 @@
         setCollapsed($("clubDiffBody"), $("clubDiffChevron"), clubMismatchRows.length === 0);
 
         if (lastBugContext) lastBugContext.clubs = clubMismatchRows.slice();
-        setCreateBugEnabled(failCount > 0 || clubMismatchRows.length > 0);
+        refreshActionButtons();
         $("meta").textContent = `${fileName} · Tax clubs: ${tax.clubs.length} · checks done`;
       } catch (err) {
         alert(err.message || String(err));
@@ -1598,6 +2108,19 @@
         onlyRoyalty,
         onlyTax,
       };
+      if (lastBugContext) {
+        lastBugContext.royalty = {
+          ran: true,
+          ok: unexpected.length === 0,
+          gapCount: amountDiffs.length,
+          expectedCount: expected.length,
+          unexpectedCount: unexpected.length,
+          onlyRoyaltyCount: onlyRoyalty.length,
+          onlyTaxCount: onlyTax.length,
+          unexpectedSample: unexpected.slice(0, 8),
+        };
+      }
+      refreshActionButtons();
       $("exportRoyaltyCsvBtn").disabled = false;
       $("royaltyResults").classList.remove("hidden");
 
@@ -1689,24 +2212,45 @@
     });
 
     $("createBugBtn").addEventListener("click", openBugModal);
+    $("genCommentBtn").addEventListener("click", openCommentModal);
     $("closeBugBtn").addEventListener("click", () => $("bugModal").classList.remove("open"));
+    $("closeCommentBtn").addEventListener("click", () => $("commentModal").classList.remove("open"));
     $("bugModal").addEventListener("click", (e) => {
       if (e.target === $("bugModal")) $("bugModal").classList.remove("open");
     });
+    $("commentModal").addEventListener("click", (e) => {
+      if (e.target === $("commentModal")) $("commentModal").classList.remove("open");
+    });
     document.addEventListener("keydown", (e) => {
-      if (e.key === "Escape") $("bugModal").classList.remove("open");
+      if (e.key !== "Escape") return;
+      $("bugModal").classList.remove("open");
+      $("commentModal").classList.remove("open");
     });
     ["bugEnv", "bugWorkspace", "bugDate"].forEach((id) => {
       $(id).addEventListener("input", renderBugTicket);
     });
+    ["commentEnv", "commentWorkspace", "commentDate", "commentTicketUrl", "commentAssignee"].forEach((id) => {
+      const el = $(id);
+      if (el) el.addEventListener("input", renderCommentTicket);
+    });
     $("copyBugBtn").addEventListener("click", async () => {
-      const text = buildBugTicketText();
+      const text = modalTextFrom($("bugTicket"));
       try {
         await navigator.clipboard.writeText(text);
         $("copyBugBtn").textContent = "Copied!";
         setTimeout(() => ($("copyBugBtn").textContent = "Copy ticket"), 1200);
       } catch {
         alert("Copy failed — select the ticket text and copy manually.");
+      }
+    });
+    $("copyCommentBtn").addEventListener("click", async () => {
+      const text = modalTextFrom($("commentTicket"));
+      try {
+        await navigator.clipboard.writeText(text);
+        $("copyCommentBtn").textContent = "Copied!";
+        setTimeout(() => ($("copyCommentBtn").textContent = "Copy comment"), 1200);
+      } catch {
+        alert("Copy failed — select the comment text and copy manually.");
       }
     });
 
@@ -1722,6 +2266,8 @@
       $("file").value = "";
       $("royaltyFile").value = "";
       $("pfaqFile").value = "";
+      if ($("commentTicketUrl")) $("commentTicketUrl").value = "";
+      if ($("commentAssignee")) $("commentAssignee").value = "";
       $("meta").textContent = "Waiting for EFT file…";
       $("royaltyMeta").textContent = "Waiting for Royalty file…";
       $("pfaqMeta").textContent = "Required — marks expected invoice gaps (PF # + PFAQ #)";
@@ -1729,8 +2275,9 @@
       $("royaltyRunBtn").disabled = true;
       $("exportClubCsvBtn").disabled = true;
       $("exportRoyaltyCsvBtn").disabled = true;
-      setCreateBugEnabled(false);
+      refreshActionButtons();
       $("bugModal").classList.remove("open");
+      $("commentModal").classList.remove("open");
       $("results").classList.add("hidden");
       $("royaltyResults").classList.add("hidden");
     });

@@ -526,16 +526,18 @@
           Home
         </button>
 
-        <div class="nav-section">Insight Reports</div>
+        <div class="nav-section">Reports</div>
         <button class="nav-item open" data-toggle="insight" type="button">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M14 2H7a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" stroke="currentColor" stroke-width="1.7"/><path d="M14 2v6h6M9 13h6M9 17h4" stroke="currentColor" stroke-width="1.7"/></svg>
-          Insight Reports
+          Reports
           <span class="spacer"></span>
           <span class="chev">▾</span>
         </button>
         <div class="nav-group" id="group-insight">
           <button class="nav-child" data-page="aje-standard" type="button">Accounting Journal Entries_ standard report</button>
           <button class="nav-child" data-page="all-members" type="button">All Members</button>
+          <button class="nav-child" data-page="drdr" type="button">DRDR</button>
+          <button class="nav-child" data-page="revenue-by-payment-type" type="button">Revenue By Payment Type</button>
         </div>
 
         <div class="nav-section">Dashboards</div>
@@ -553,7 +555,7 @@
         <div class="nav-section">EOM Reports</div>
         <button class="nav-item open" data-toggle="eom" type="button">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><rect x="3" y="5" width="18" height="15" rx="2" stroke="currentColor" stroke-width="1.7"/><path d="M3 10h18M9 5v15" stroke="currentColor" stroke-width="1.7"/></svg>
-          EOM reports
+          EOM Reports
           <span class="spacer"></span>
           <span class="chev">▾</span>
         </button>
@@ -563,15 +565,14 @@
           <button class="nav-child" data-page="accounting-journal" type="button">Accounting Journal Entries</button>
         </div>
 
-        <div class="nav-section">PF Reports</div>
+        <div class="nav-section">PF Custom Reports</div>
         <button class="nav-item open" data-toggle="pf" type="button">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M4 20V5M4 20h16M8 16v-5M12 16V8M16 16v-3" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
-          PF reports
+          PF Custom Reports
           <span class="spacer"></span>
           <span class="chev">▾</span>
         </button>
         <div class="nav-group" id="group-pf">
-          <button class="nav-child" data-page="drdr" type="button">DRDR</button>
           <button class="nav-child" data-page="past-due-member" type="button">Past Due Member Detail</button>
         </div>
 
@@ -596,7 +597,7 @@
       home: {
         kicker: "HOME",
         title: "QA Environment",
-        desc: "Use the left panel to open Insight Reports, Dashboards, EOM reports, and PF reports for validation.",
+        desc: "Use the left panel to open Reports, Dashboards, EOM Reports, and PF Custom Reports for validation.",
         ready: true,
         cards: [
           { id: "daily-deposit", title: "Daily Deposit Analysis (Ignite)", desc: "Settlement balance mismatch check with upload, month filter, and export." },
@@ -605,16 +606,19 @@
         ],
       },
       "insight-reports": {
-        kicker: "INSIGHT REPORTS",
-        title: "Insight Reports",
-        desc: "Insight report group. Open a child report from the left panel.",
+        kicker: "REPORTS",
+        title: "Reports",
+        desc: "Reports group. Open a child report from the left panel.",
         cards: [
           { id: "aje-standard", title: "Accounting Journal Entries_ standard report", desc: "AJE Debit/Credit balance + DRDR section cross-check (club-wise)." },
           { id: "all-members", title: "All Members", desc: "Active/Inactive split + same-person duplicate check (Agreement + Name + DOB). Family Primary/Secondary excluded." },
+          { id: "drdr", title: "DRDR", desc: "Summary + club-wise DRDR field vs total validation with filters." },
+          { id: "revenue-by-payment-type", title: "Revenue By Payment Type", desc: "Flags receipts with UNAPPLIED + Applied lines together, with amount-match & agreement leading-zero checks." },
         ],
       },
       "aje-standard": { embed: "aje-standard.html?v=2" },
       "all-members": { embed: "all-members.html?v=1" },
+      "revenue-by-payment-type": { embed: "revenue-by-payment-type.html?v=2" },
       dashboards: {
         kicker: "DASHBOARDS",
         title: "Dashboards",
@@ -633,7 +637,7 @@
       },
       "eom-reports": {
         kicker: "EOM REPORTS",
-        title: "EOM reports",
+        title: "EOM Reports",
         desc: "End-of-month report group. Open a child report from the left panel.",
         cards: [
           { id: "eft-allocation", title: "EFT Allocation", desc: "EFT + Royalty Dues Gross / Pre Tax Dues validation, PFAQ expected gaps, and club-level Combined Summary checks." },
@@ -645,11 +649,10 @@
       "eft-annual": { embed: "eft-allocation-annual.html?v=20260804a" },
       "accounting-journal": { embed: "accounting-journal.html?v=1" },
       "pf-reports": {
-        kicker: "PF REPORTS",
-        title: "PF reports",
-        desc: "PF report group. Open a child report from the left panel.",
+        kicker: "PF CUSTOM REPORTS",
+        title: "PF Custom Reports",
+        desc: "PF custom report group. Open a child report from the left panel.",
         cards: [
-          { id: "drdr", title: "DRDR", desc: "Summary + club-wise DRDR field vs total validation with filters." },
           { id: "past-due-member", title: "Past Due Member Detail", desc: "Agreement-level duplicate check (agr + due date + profit center + amount), summary + club-wise." },
         ],
       },
@@ -676,10 +679,10 @@
       if (["eft-allocation", "eft-annual", "accounting-journal", "eom-reports"].includes(page)) {
         document.querySelector('[data-toggle="eom"]').classList.add("active");
       }
-      if (["drdr", "past-due-member", "pf-reports"].includes(page)) {
+      if (["past-due-member", "pf-reports"].includes(page)) {
         document.querySelector('[data-toggle="pf"]').classList.add("active");
       }
-      if (["aje-standard", "all-members", "insight-reports"].includes(page)) {
+      if (["aje-standard", "all-members", "drdr", "revenue-by-payment-type", "insight-reports"].includes(page)) {
         document.querySelector('[data-toggle="insight"]').classList.add("active");
       }
     }

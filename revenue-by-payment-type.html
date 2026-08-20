@@ -1,0 +1,686 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Revenue By Payment Type — ABC Insights QA</title>
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+  <style>
+    :root {
+      --bg: #0b1220;
+      --panel: #111827;
+      --panel2: #0f172a;
+      --line: #1f2937;
+      --text: #e5e7eb;
+      --muted: #94a3b8;
+      --accent: #38bdf8;
+      --ok: #22c55e;
+      --bad: #ef4444;
+      --warn: #f59e0b;
+      --purple: #a78bfa;
+      --pink: #f472b6;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      background: radial-gradient(1200px 600px at 10% -10%, #1e293b 0%, var(--bg) 55%);
+      color: var(--text);
+    }
+    .wrap { max-width: 1360px; margin: 0 auto; padding: 24px 20px 60px; }
+    h1 { margin: 0 0 4px; font-size: 1.55rem; }
+    .sub { color: var(--muted); margin-bottom: 16px; font-size: 0.9rem; line-height: 1.5; }
+    .badge-ver {
+      display: inline-block; margin-left: 8px; padding: 2px 8px; border-radius: 999px;
+      background: #0c1a33; color: #93c5fd; font-size: 0.72rem; font-weight: 700; vertical-align: middle;
+    }
+    .card {
+      background: linear-gradient(180deg, var(--panel), var(--panel2));
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 16px;
+      margin-bottom: 14px;
+    }
+    .upload-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+    .btn {
+      background: var(--accent); color: #082f49; border: 0; border-radius: 10px;
+      padding: 10px 14px; font-weight: 700; cursor: pointer; font-size: 0.86rem;
+    }
+    .btn.ghost { background: transparent; color: var(--text); border: 1px solid var(--line); }
+    .btn.danger { background: #ef4444; color: #fff; }
+    .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+    .btn.ghost:hover:not(:disabled) { border-color: var(--accent); }
+    .meta { color: var(--muted); font-size: 0.84rem; }
+    .kpis { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px; margin-top: 12px; }
+    .kpi { background: #0b1324; border: 1px solid var(--line); border-radius: 12px; padding: 12px; }
+    .kpi .l { color: var(--muted); font-size: 0.72rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
+    .kpi .v { font-size: 1.35rem; font-weight: 800; margin-top: 4px; }
+    .kpi .hint { color: var(--muted); font-size: 0.7rem; line-height: 1.35; margin-top: 4px; }
+    .kpi.ok .v { color: var(--ok); } .kpi.bad .v { color: var(--bad); }
+    .kpi.warn .v { color: var(--warn); } .kpi.b1 .v { color: var(--purple); }
+    .kpi.b2 .v { color: var(--pink); } .kpi.b3 .v { color: var(--accent); }
+    .rule {
+      border: 1px dashed rgba(148, 163, 184, 0.28); border-radius: 12px;
+      padding: 12px 14px; color: var(--muted); font-size: 0.85rem; line-height: 1.55;
+      background: rgba(56, 189, 248, 0.03);
+    }
+    .rule strong { color: #93c5fd; }
+    .rule .tag { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 0.7rem; font-weight: 700; margin-right: 4px; }
+    .tag.t-b1 { background: rgba(167, 139, 250, 0.18); color: var(--purple); border: 1px solid rgba(167, 139, 250, 0.4); }
+    .tag.t-b2 { background: rgba(244, 114, 182, 0.18); color: var(--pink); border: 1px solid rgba(244, 114, 182, 0.4); }
+    .tag.t-b3 { background: rgba(56, 189, 248, 0.18); color: var(--accent); border: 1px solid rgba(56, 189, 248, 0.4); }
+    .tag.t-warn { background: rgba(245, 158, 11, 0.18); color: var(--warn); border: 1px solid rgba(245, 158, 11, 0.4); }
+    .date-group {
+      margin-top: 14px; border: 1px solid var(--line); border-radius: 12px; overflow: hidden;
+    }
+    .date-head {
+      display: flex; align-items: center; justify-content: space-between; padding: 12px 14px;
+      background: linear-gradient(180deg, #0c1424, #0a1120);
+      cursor: pointer; user-select: none;
+    }
+    .date-head:hover { background: #0d1526; }
+    .date-title { font-weight: 700; font-size: 0.98rem; display: inline-flex; align-items: center; gap: 8px; }
+    .date-count {
+      background: var(--bad); color: #fff; padding: 1px 8px; border-radius: 999px;
+      font-size: 0.72rem; font-weight: 800; letter-spacing: 0.02em;
+    }
+    .date-meta { color: var(--muted); font-size: 0.8rem; }
+    .date-body { padding: 12px; display: none; background: #0a1120; }
+    .date-group.open .date-body { display: block; }
+    .date-group .chev { transition: transform 0.15s; color: var(--muted); }
+    .date-group.open .chev { transform: rotate(180deg); }
+
+    .receipt {
+      border: 1px solid var(--line); border-radius: 10px; margin-bottom: 10px; overflow: hidden;
+      background: #0b1324;
+    }
+    .receipt-head {
+      display: grid; grid-template-columns: 1.6fr 1.1fr 0.9fr 0.9fr 0.9fr 0.9fr; gap: 8px;
+      padding: 10px 12px; font-size: 0.82rem; align-items: center;
+      background: linear-gradient(180deg, #0e1830, #0a1224);
+    }
+    .receipt-head .r-title { display: flex; align-items: center; gap: 8px; font-weight: 700; }
+    .receipt-head .r-title small { color: var(--muted); font-weight: 500; }
+    .receipt-head .r-kv { display: flex; flex-direction: column; }
+    .receipt-head .r-kv .l { color: var(--muted); font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.04em; }
+    .receipt-head .r-kv .v { font-weight: 700; font-size: 0.86rem; }
+    .receipt-head .r-kv.bad .v { color: var(--bad); }
+    .receipt-head .r-kv.ok .v { color: var(--ok); }
+    .receipt-head .r-kv.warn .v { color: var(--warn); }
+
+    .receipt-body { padding: 0; }
+    .receipt-body table { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
+    .receipt-body th, .receipt-body td { padding: 6px 8px; border-bottom: 1px solid #172033; text-align: left; }
+    .receipt-body th { background: #0a1224; color: var(--muted); font-weight: 600; text-transform: uppercase; font-size: 0.68rem; letter-spacing: 0.04em; }
+    .receipt-body tr.unapp { background: rgba(239, 68, 68, 0.08); }
+    .receipt-body tr.applied { background: rgba(34, 197, 94, 0.04); }
+    .receipt-body .amt { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
+    .receipt-body .type-cell { font-weight: 700; }
+    .receipt-body .type-cell.unapp { color: var(--bad); }
+    .receipt-body .type-cell.applied { color: var(--ok); }
+
+    .placeholder {
+      border: 1px dashed #334155; border-radius: 12px; padding: 22px; color: var(--muted);
+      background: rgba(56, 189, 248, 0.04); line-height: 1.6;
+    }
+    .empty { text-align: center; padding: 30px; color: var(--muted); }
+
+    .toolbar {
+      display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 10px;
+      padding-top: 10px; border-top: 1px solid var(--line);
+    }
+    .toolbar input, .toolbar select {
+      background: #0a1224; color: var(--text); border: 1px solid var(--line);
+      border-radius: 8px; padding: 8px 10px; font-size: 0.84rem;
+    }
+    .toolbar input:focus, .toolbar select:focus { border-color: var(--accent); outline: none; }
+    .stat-line { color: var(--muted); font-size: 0.82rem; margin-top: 6px; }
+
+    @media (max-width: 900px) {
+      .kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+      .receipt-head { grid-template-columns: 1fr 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Revenue By Payment Type <span class="badge-ver">v1.0</span></h1>
+    <p class="sub">
+      Detects receipts where the same payment appears as both <strong style="color:#ef4444">UNAPPLIED PAYMENT</strong> and applied lines (LATE / SERVICE FEES, DIGX, dues, etc.). Groups results by <strong>Payment Date</strong>, so multi-day exports are supported.
+    </p>
+
+    <div class="card">
+      <div class="upload-row">
+        <label for="fileInput" class="btn ghost" style="cursor: pointer;">
+          <input id="fileInput" type="file" accept=".xlsx,.xls,.csv" style="display: none;" />
+          Choose file
+        </label>
+        <button class="btn" id="runBtn" disabled>Run validation</button>
+        <button class="btn ghost" id="exportBtn" disabled>Export Report</button>
+        <button class="btn ghost" id="clearBtn" disabled>Clear</button>
+        <span class="meta" id="fileMeta">No file selected.</span>
+      </div>
+
+      <div class="rule" style="margin-top: 12px;">
+        <strong>Rule:</strong> group rows by <strong>Receipt Number</strong>; flag any receipt that has BOTH a <em>UNAPPLIED PAYMENT</em> Profit Center row AND at least one row with a different Profit Center — the payment appears to be applied, so unapplied is likely a data issue.
+        <div style="margin-top: 6px;">
+          Bonus checks:
+          <span class="tag t-b2">B2 · Unapplied amount matches an applied line</span>
+          <span class="tag t-b3">B3 · Agreement leading-zero variant</span>
+        </div>
+      </div>
+    </div>
+
+    <div id="summary" class="card" style="display: none;">
+      <h2 style="margin: 0 0 4px; font-size: 1.02rem;">Summary</h2>
+      <div class="stat-line" id="summaryLine"></div>
+      <div class="kpis" id="kpis"></div>
+      <div class="toolbar">
+        <input id="searchBox" type="text" placeholder="Filter by receipt / club / member / agreement…" style="min-width: 260px;" />
+        <select id="dateFilter"><option value="">All dates</option></select>
+        <select id="clubFilter"><option value="">All clubs</option></select>
+        <select id="bonusFilter">
+          <option value="">All bonus flags</option>
+          <option value="B2">Only B2 (amount match)</option>
+          <option value="B3">Only B3 (agr leading zero)</option>
+          <option value="ANY">Any bonus present</option>
+        </select>
+        <span class="meta" id="visibleCount"></span>
+      </div>
+    </div>
+
+    <div id="resultsHost"></div>
+  </div>
+
+  <script>
+    const fileInput = document.getElementById("fileInput");
+    const runBtn = document.getElementById("runBtn");
+    const clearBtn = document.getElementById("clearBtn");
+    const exportBtn = document.getElementById("exportBtn");
+    const fileMeta = document.getElementById("fileMeta");
+    const summaryCard = document.getElementById("summary");
+    const kpisEl = document.getElementById("kpis");
+    const resultsHost = document.getElementById("resultsHost");
+    const searchBox = document.getElementById("searchBox");
+    const dateFilter = document.getElementById("dateFilter");
+    const clubFilter = document.getElementById("clubFilter");
+    const bonusFilter = document.getElementById("bonusFilter");
+    const visibleCount = document.getElementById("visibleCount");
+    const summaryLine = document.getElementById("summaryLine");
+
+    let selectedFile = null;
+    let flaggedReceipts = [];
+    let scanStats = null;
+
+    function toYMD(d) {
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, "0");
+      const day = String(d.getDate()).padStart(2, "0");
+      return `${y}-${m}-${day}`;
+    }
+    function fmtDate(v) {
+      if (!v) return "";
+      if (v instanceof Date) return toYMD(v);
+      const s = String(v).trim();
+      if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+      // handle US-style m/d/yyyy or m-d-yyyy without timezone drift
+      let m = s.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{2,4})/);
+      if (m) {
+        let [_, mm, dd, yy] = m;
+        if (yy.length === 2) yy = "20" + yy;
+        return `${yy}-${String(mm).padStart(2, "0")}-${String(dd).padStart(2, "0")}`;
+      }
+      const d = new Date(s);
+      return isNaN(d.getTime()) ? s : toYMD(d);
+    }
+    function fmtMoney(n) {
+      if (n === null || n === undefined || n === "") return "";
+      const num = Number(n);
+      if (isNaN(num)) return String(n);
+      return "$" + num.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+    function safeStr(v) { return v === null || v === undefined ? "" : String(v).trim(); }
+    function removeZeros(s) { return String(s || "").replace(/0/g, ""); }
+
+    fileInput.addEventListener("change", (e) => {
+      selectedFile = e.target.files[0] || null;
+      if (selectedFile) {
+        fileMeta.textContent = `Selected: ${selectedFile.name} (${(selectedFile.size / 1024).toFixed(1)} KB)`;
+        runBtn.disabled = false;
+        clearBtn.disabled = false;
+      } else {
+        fileMeta.textContent = "No file selected.";
+        runBtn.disabled = true;
+        clearBtn.disabled = true;
+      }
+    });
+
+    clearBtn.addEventListener("click", () => {
+      selectedFile = null;
+      fileInput.value = "";
+      fileMeta.textContent = "No file selected.";
+      runBtn.disabled = true;
+      clearBtn.disabled = true;
+      exportBtn.disabled = true;
+      summaryCard.style.display = "none";
+      resultsHost.innerHTML = "";
+      flaggedReceipts = [];
+      scanStats = null;
+    });
+
+    runBtn.addEventListener("click", async () => {
+      if (!selectedFile) return;
+      resultsHost.innerHTML = `<div class="card empty">Reading <strong>${selectedFile.name}</strong> …</div>`;
+      try {
+        const buf = await selectedFile.arrayBuffer();
+        const wb = XLSX.read(buf, { type: "array", cellDates: true });
+        const sheetName = wb.SheetNames.find((n) => /Revenue by Payment Type/i.test(n)) || wb.SheetNames[0];
+        const ws = wb.Sheets[sheetName];
+        if (!ws) throw new Error("No detail sheet found in workbook");
+        const grid = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null, raw: true });
+
+        // Find header row (contains "Receipt Number")
+        let hdrIdx = -1;
+        for (let i = 0; i < Math.min(20, grid.length); i++) {
+          const row = grid[i] || [];
+          if (row.some((c) => safeStr(c) === "Receipt Number")) { hdrIdx = i; break; }
+        }
+        if (hdrIdx < 0) throw new Error("Header row with 'Receipt Number' not found");
+        const header = (grid[hdrIdx] || []).map((h) => safeStr(h).replace(/\s+/g, " "));
+        const col = (name) => header.findIndex((h) => h.replace(/\s+/g, " ").toLowerCase() === name.toLowerCase());
+        const idx = {
+          clubName: col("Club Name"),
+          clubNo: col("Club #"),
+          member: col("Member"),
+          agr: col("Agreement Number"),
+          lastName: col("Last Name"),
+          firstName: col("First Name"),
+          mtype: col("Membership Type"),
+          pc: col("Profit Center"),
+          item: col("Item"),
+          date: col("Payment Date"),
+          ptype: col("Payment Type"),
+          pdesc: col("Payment Description"),
+          amt: col("Payment Amount"),
+          tax: col("Sales Tax"),
+          exTax: col("Payment Amount Excluding Tax"),
+          receipt: col("Receipt Number"),
+          coll: col("Collected Method"),
+          gl: col("GL Code"),
+        };
+        if (idx.receipt < 0) throw new Error("Receipt Number column not detected");
+
+        // Group by receipt
+        const byReceipt = new Map();
+        let totalDataRows = 0;
+        for (let r = hdrIdx + 1; r < grid.length; r++) {
+          const row = grid[r] || [];
+          const receipt = safeStr(row[idx.receipt]);
+          if (!receipt) continue;
+          totalDataRows++;
+          const item = {
+            r: r + 1,
+            clubName: safeStr(row[idx.clubName]),
+            clubNo: safeStr(row[idx.clubNo]),
+            member: safeStr(row[idx.member]),
+            agr: safeStr(row[idx.agr]),
+            ln: safeStr(row[idx.lastName]),
+            fn: safeStr(row[idx.firstName]),
+            mtype: safeStr(row[idx.mtype]),
+            pc: safeStr(row[idx.pc]),
+            item: safeStr(row[idx.item]),
+            date: fmtDate(row[idx.date]),
+            ptype: safeStr(row[idx.ptype]),
+            pdesc: safeStr(row[idx.pdesc]),
+            amt: Number(row[idx.amt]) || 0,
+            tax: Number(row[idx.tax]) || 0,
+            exTax: Number(row[idx.exTax]) || 0,
+            coll: safeStr(row[idx.coll]),
+            isUnapp: /UNAPPLIED PAYMENT/i.test(safeStr(row[idx.pc])),
+          };
+          if (!byReceipt.has(receipt)) byReceipt.set(receipt, []);
+          byReceipt.get(receipt).push(item);
+        }
+
+        // Flag mixed receipts
+        const flagged = [];
+        for (const [receipt, items] of byReceipt.entries()) {
+          const hasUnapp = items.some((x) => x.isUnapp);
+          const hasApplied = items.some((x) => !x.isUnapp && x.pc);
+          if (!(hasUnapp && hasApplied)) continue;
+          const unappItems = items.filter((x) => x.isUnapp);
+          const applItems = items.filter((x) => !x.isUnapp);
+          const unappTotal = unappItems.reduce((s, x) => s + x.amt, 0);
+          const applTotal = applItems.reduce((s, x) => s + x.amt, 0);
+
+          // B2: any unapp amount exactly equals any applied amount
+          const applAmts = new Set(applItems.map((x) => Math.round(x.amt * 100) / 100));
+          const B2 = unappItems.some((u) => applAmts.has(Math.round(u.amt * 100) / 100));
+
+          // B3: agreement numbers differ by leading/embedded zeros only
+          const agrsUnapp = new Set(unappItems.map((x) => x.agr).filter(Boolean));
+          const agrsAppl = new Set(applItems.map((x) => x.agr).filter(Boolean));
+          const canonSet = new Set([...agrsUnapp, ...agrsAppl].map(removeZeros));
+          const B3 = (agrsUnapp.size + agrsAppl.size) > 0 &&
+                     canonSet.size === 1 &&
+                     new Set([...agrsUnapp, ...agrsAppl]).size > 1;
+
+          const dates = [...new Set(items.map((x) => x.date))].sort();
+          const clubs = [...new Set(items.map((x) => x.clubNo).filter(Boolean))].sort();
+          const members = [...new Set(items.map((x) => `${x.ln} ${x.fn}`.trim()))].filter(Boolean);
+          const ptypes = [...new Set(items.map((x) => x.ptype).filter(Boolean))];
+
+          flagged.push({
+            receipt, items, unappItems, applItems,
+            unappTotal, applTotal, diff: unappTotal + applTotal,
+            B2, B3, dates, clubs, members, ptypes,
+            primaryDate: dates[0] || "(no date)",
+          });
+        }
+
+        flaggedReceipts = flagged;
+        scanStats = {
+          totalRows: totalDataRows,
+          totalReceipts: byReceipt.size,
+        };
+        populateFilters();
+        renderResults();
+        exportBtn.disabled = flagged.length === 0;
+      } catch (err) {
+        resultsHost.innerHTML = `<div class="card"><p class="meta" style="color: var(--bad);">Failed: ${err.message}</p></div>`;
+        console.error(err);
+      }
+    });
+
+    function renderSummary(visibleList) {
+      const s = scanStats;
+      summaryCard.style.display = "block";
+      const v = visibleList || flaggedReceipts;
+      const isFiltered = v.length !== flaggedReceipts.length;
+      summaryLine.innerHTML = `
+        Scanned <strong>${s.totalRows.toLocaleString()}</strong> data rows across
+        <strong>${s.totalReceipts.toLocaleString()}</strong> unique receipts.
+        ${isFiltered ? `<span style="color:#f59e0b;font-weight:700;">(Filtered view · KPIs reflect current filters)</span>` : ""}
+      `;
+      const b2 = v.filter((f) => f.B2).length;
+      const b3 = v.filter((f) => f.B3).length;
+      const dates = new Set(v.map((f) => f.primaryDate));
+      const clubs = new Set(v.flatMap((f) => f.clubs));
+      kpisEl.innerHTML = `
+        <div class="kpi bad"><div class="l">Flagged Receipts</div><div class="v">${v.length}</div><div class="hint">UNAPPLIED + Applied on same receipt</div></div>
+        <div class="kpi b2"><div class="l">B2 · Amount exact match</div><div class="v">${b2}</div><div class="hint">Unapplied amount = an applied line amount</div></div>
+        <div class="kpi b3"><div class="l">B3 · Agr leading zero</div><div class="v">${b3}</div><div class="hint">Agreement differs only by extra zero(s)</div></div>
+        <div class="kpi"><div class="l">Dates in view</div><div class="v">${dates.size}</div><div class="hint">Payment dates covered</div></div>
+        <div class="kpi"><div class="l">Clubs in view</div><div class="v">${clubs.size}</div><div class="hint">Unique clubs with flags</div></div>
+      `;
+    }
+
+    function populateFilters() {
+      const dates = [...new Set(flaggedReceipts.map((f) => f.primaryDate))].sort();
+      dateFilter.innerHTML = `<option value="">All dates (${dates.length})</option>` +
+        dates.map((d) => `<option value="${d}">${d}</option>`).join("");
+      const clubs = [...new Set(flaggedReceipts.flatMap((f) => f.clubs))].sort();
+      clubFilter.innerHTML = `<option value="">All clubs (${clubs.length})</option>` +
+        clubs.map((c) => `<option value="${c}">${c}</option>`).join("");
+    }
+
+    function passesFilters(f) {
+      const q = searchBox.value.trim().toLowerCase();
+      const dv = dateFilter.value;
+      const cv = clubFilter.value;
+      const bv = bonusFilter.value;
+      if (dv && f.primaryDate !== dv) return false;
+      if (cv && !f.clubs.includes(cv)) return false;
+      if (bv === "B2" && !f.B2) return false;
+      if (bv === "B3" && !f.B3) return false;
+      if (bv === "ANY" && !(f.B2 || f.B3)) return false;
+      if (q) {
+        const hay = [
+          f.receipt, ...f.clubs, ...f.members,
+          ...f.items.map((x) => x.agr), ...f.items.map((x) => x.pc), ...f.items.map((x) => x.item),
+        ].join(" ").toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    }
+
+    let currentVisible = [];
+
+    function renderResults() {
+      const visible = flaggedReceipts.filter(passesFilters);
+      currentVisible = visible;
+      visibleCount.textContent = `${visible.length} of ${flaggedReceipts.length} receipts shown`;
+      renderSummary(visible);
+      exportBtn.disabled = visible.length === 0;
+
+      if (visible.length === 0) {
+        resultsHost.innerHTML = `<div class="card empty">${flaggedReceipts.length === 0
+          ? "No mismatched receipts found — file looks clean."
+          : "No receipts match the current filters."
+        }</div>`;
+        return;
+      }
+
+      // Group by primaryDate
+      const byDate = new Map();
+      for (const f of visible) {
+        if (!byDate.has(f.primaryDate)) byDate.set(f.primaryDate, []);
+        byDate.get(f.primaryDate).push(f);
+      }
+      const dates = [...byDate.keys()].sort();
+
+      const html = dates.map((d) => {
+        const list = byDate.get(d);
+        const totalUnapp = list.reduce((s, f) => s + f.unappTotal, 0);
+        const b2 = list.filter((f) => f.B2).length;
+        const b3 = list.filter((f) => f.B3).length;
+        return `
+          <div class="date-group open" data-date="${d}">
+            <div class="date-head" onclick="this.parentElement.classList.toggle('open')">
+              <div>
+                <div class="date-title">📅 ${d} <span class="date-count">${list.length}</span></div>
+                <div class="date-meta">Unapplied $ ${fmtMoney(totalUnapp)}</div>
+              </div>
+              <div style="display: flex; gap: 6px; align-items: center;">
+                ${b2 ? `<span class="tag t-b2">B2 · ${b2}</span>` : ""}
+                ${b3 ? `<span class="tag t-b3">B3 · ${b3}</span>` : ""}
+                <span class="chev">▾</span>
+              </div>
+            </div>
+            <div class="date-body">${list.map(renderReceipt).join("")}</div>
+          </div>
+        `;
+      }).join("");
+      resultsHost.innerHTML = html;
+    }
+
+    function renderReceipt(f) {
+      const member = f.members[0] || "";
+      const rows = [...f.unappItems, ...f.applItems].map((it) => `
+        <tr class="${it.isUnapp ? "unapp" : "applied"}">
+          <td class="type-cell ${it.isUnapp ? "unapp" : "applied"}">${it.isUnapp ? "UNAPPLIED" : "Applied"}</td>
+          <td>${it.mtype || ""}</td>
+          <td>${it.pc || ""}</td>
+          <td>${it.item || ""}</td>
+          <td>${it.pdesc || ""}</td>
+          <td>${it.ptype || ""}</td>
+          <td>${it.agr || ""}</td>
+          <td class="amt">${fmtMoney(it.amt)}</td>
+          <td class="amt">${fmtMoney(it.tax)}</td>
+          <td class="amt">${fmtMoney(it.exTax)}</td>
+        </tr>
+      `).join("");
+      const bonuses = [
+        f.B2 ? `<span class="tag t-b2">B2</span>` : "",
+        f.B3 ? `<span class="tag t-b3">B3</span>` : "",
+      ].filter(Boolean).join(" ");
+      const diffClass = Math.abs(f.diff) < 0.01 ? "ok" : "warn";
+      return `
+        <div class="receipt">
+          <div class="receipt-head">
+            <div class="r-title">
+              <span>🧾 ${f.receipt}</span>
+              <small>· ${member} · Club ${f.clubs.join(", ") || "?"}</small>
+              ${bonuses ? `<span style="margin-left: 6px;">${bonuses}</span>` : ""}
+            </div>
+            <div class="r-kv"><div class="l">Payment Type</div><div class="v">${f.ptypes.join(", ") || "-"}</div></div>
+            <div class="r-kv bad"><div class="l">Unapplied</div><div class="v">${fmtMoney(f.unappTotal)}</div></div>
+            <div class="r-kv ok"><div class="l">Applied</div><div class="v">${fmtMoney(f.applTotal)}</div></div>
+            <div class="r-kv ${diffClass}"><div class="l">Diff (U+A)</div><div class="v">${fmtMoney(f.diff)}</div></div>
+            <div class="r-kv"><div class="l">Lines</div><div class="v">${f.items.length} (U${f.unappItems.length} / A${f.applItems.length})</div></div>
+          </div>
+          <div class="receipt-body">
+            <table>
+              <thead>
+                <tr>
+                  <th>Class</th><th>Mtype</th><th>Profit Center</th><th>Item</th><th>Payment Desc</th>
+                  <th>Pay Type</th><th>Agreement</th><th>Amount</th><th>Tax</th><th>Ex-Tax</th>
+                </tr>
+              </thead>
+              <tbody>${rows}</tbody>
+            </table>
+          </div>
+        </div>
+      `;
+    }
+
+    exportBtn.addEventListener("click", () => {
+      const list = (currentVisible && currentVisible.length ? currentVisible : flaggedReceipts);
+      if (!list.length) return;
+
+      const wb = XLSX.utils.book_new();
+
+      // ----- Sheet 1: Summary (one row per receipt, difference-focused) -----
+      const summaryHeader = [
+        "Receipt Number", "Payment Date", "Club #", "Member", "Agreement(s)",
+        "Payment Type(s)", "Unapplied Total", "Applied Total", "Difference (U+A)",
+        "Match?", "Lines (U/A)", "B2 · Amount match", "B3 · Agr leading-zero",
+      ];
+      const summaryRows = list.map((f) => {
+        const member = f.members[0] || "";
+        const agrs = [...new Set(f.items.map((x) => x.agr).filter(Boolean))].join(", ");
+        const match = Math.abs(f.diff) < 0.01 ? "MATCH" : "MISMATCH";
+        return [
+          f.receipt, f.primaryDate, f.clubs.join(", "), member, agrs,
+          f.ptypes.join(", "), f.unappTotal, f.applTotal, f.diff, match,
+          `${f.unappItems.length} / ${f.applItems.length}`,
+          f.B2 ? "Y" : "", f.B3 ? "Y" : "",
+        ];
+      });
+      const wsSummary = XLSX.utils.aoa_to_sheet([summaryHeader, ...summaryRows]);
+      wsSummary["!cols"] = [
+        { wch: 22 }, { wch: 12 }, { wch: 10 }, { wch: 22 }, { wch: 22 },
+        { wch: 22 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 10 },
+        { wch: 12 }, { wch: 16 }, { wch: 18 },
+      ];
+      // freeze header + auto-filter
+      wsSummary["!freeze"] = { xSplit: 0, ySplit: 1 };
+      wsSummary["!autofilter"] = { ref: XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: summaryRows.length, c: summaryHeader.length - 1 } }) };
+      // Style header + highlight mismatch rows
+      const hdrStyle = { font: { bold: true, color: { rgb: "FFFFFF" } }, fill: { fgColor: { rgb: "1F2937" } }, alignment: { horizontal: "center" } };
+      for (let c = 0; c < summaryHeader.length; c++) {
+        const ref = XLSX.utils.encode_cell({ r: 0, c });
+        if (wsSummary[ref]) wsSummary[ref].s = hdrStyle;
+      }
+      for (let r = 0; r < summaryRows.length; r++) {
+        const row = summaryRows[r];
+        const isMismatch = row[9] === "MISMATCH";
+        for (let c = 0; c < row.length; c++) {
+          const ref = XLSX.utils.encode_cell({ r: r + 1, c });
+          if (!wsSummary[ref]) continue;
+          const base = { alignment: { vertical: "center" } };
+          if (isMismatch) base.fill = { fgColor: { rgb: "FEE2E2" } };
+          if (c === 6) base.font = { color: { rgb: "B91C1C" }, bold: true }; // Unapplied
+          if (c === 7) base.font = { color: { rgb: "047857" }, bold: true }; // Applied
+          if (c === 8) base.font = { color: { rgb: isMismatch ? "B91C1C" : "047857" }, bold: true }; // Diff
+          if (c === 9) base.font = { color: { rgb: isMismatch ? "B91C1C" : "047857" }, bold: true }; // Match?
+          if ([6, 7, 8].includes(c)) base.numFmt = "$#,##0.00;[Red]-$#,##0.00";
+          wsSummary[ref].s = base;
+        }
+      }
+      XLSX.utils.book_append_sheet(wb, wsSummary, "Summary");
+
+      // ----- Sheet 2: Differences (grouped per receipt, side-by-side blocks) -----
+      const diffRows = [];
+      const merges = [];
+      const rowStyles = [];
+      const push = (row, style) => { diffRows.push(row); rowStyles.push(style || null); };
+      const cols = ["Class", "Receipt", "Date", "Club", "Member", "Mtype", "Profit Center", "Item", "Payment Desc", "Pay Type", "Agreement", "Amount", "Tax", "Ex-Tax"];
+      for (const f of list) {
+        const member = f.members[0] || "";
+        const match = Math.abs(f.diff) < 0.01;
+        // group header
+        const gLabel = `RECEIPT ${f.receipt}  ·  ${f.primaryDate}  ·  Club ${f.clubs.join(", ")}  ·  ${member}  ·  ${match ? "MATCH" : "MISMATCH"}${f.B2 ? "  · B2" : ""}${f.B3 ? "  · B3" : ""}`;
+        push([gLabel, "", "", "", "", "", "", "", "", "", "", "", "", ""], "group");
+        merges.push({ s: { r: diffRows.length - 1, c: 0 }, e: { r: diffRows.length - 1, c: cols.length - 1 } });
+        // column header
+        push(cols, "hdr");
+        // unapplied rows
+        for (const it of f.unappItems) {
+          push([
+            "UNAPPLIED", f.receipt, it.date, it.clubNo, `${it.ln} ${it.fn}`.trim(),
+            it.mtype, it.pc, it.item, it.pdesc, it.ptype, it.agr, it.amt, it.tax, it.exTax,
+          ], "unapp");
+        }
+        // subtotal row
+        push(["Unapplied Total", "", "", "", "", "", "", "", "", "", "", f.unappTotal, "", ""], "subUnapp");
+        // applied rows
+        for (const it of f.applItems) {
+          push([
+            "Applied", f.receipt, it.date, it.clubNo, `${it.ln} ${it.fn}`.trim(),
+            it.mtype, it.pc, it.item, it.pdesc, it.ptype, it.agr, it.amt, it.tax, it.exTax,
+          ], "appl");
+        }
+        push(["Applied Total", "", "", "", "", "", "", "", "", "", "", f.applTotal, "", ""], "subAppl");
+        // difference row
+        push(["Difference (U + A)", "", "", "", "", "", "", "", "", "", "", f.diff, "", ""], match ? "diffOk" : "diffBad");
+        // blank spacer
+        push(["", "", "", "", "", "", "", "", "", "", "", "", "", ""], null);
+      }
+      const wsDiff = XLSX.utils.aoa_to_sheet(diffRows);
+      wsDiff["!cols"] = [
+        { wch: 20 }, { wch: 20 }, { wch: 12 }, { wch: 10 }, { wch: 24 }, { wch: 10 },
+        { wch: 26 }, { wch: 18 }, { wch: 26 }, { wch: 14 }, { wch: 18 },
+        { wch: 12 }, { wch: 10 }, { wch: 10 },
+      ];
+      wsDiff["!merges"] = merges;
+      const styleMap = {
+        group: { font: { bold: true, color: { rgb: "FFFFFF" }, sz: 12 }, fill: { fgColor: { rgb: "1F2937" } }, alignment: { horizontal: "left", vertical: "center" } },
+        hdr: { font: { bold: true, color: { rgb: "FFFFFF" } }, fill: { fgColor: { rgb: "374151" } }, alignment: { horizontal: "center" } },
+        unapp: { fill: { fgColor: { rgb: "FEE2E2" } }, font: { color: { rgb: "991B1B" } } },
+        appl: { fill: { fgColor: { rgb: "D1FAE5" } }, font: { color: { rgb: "065F46" } } },
+        subUnapp: { font: { bold: true, color: { rgb: "991B1B" } }, fill: { fgColor: { rgb: "FCA5A5" } } },
+        subAppl: { font: { bold: true, color: { rgb: "065F46" } }, fill: { fgColor: { rgb: "6EE7B7" } } },
+        diffOk: { font: { bold: true, color: { rgb: "064E3B" } }, fill: { fgColor: { rgb: "34D399" } } },
+        diffBad: { font: { bold: true, color: { rgb: "7F1D1D" } }, fill: { fgColor: { rgb: "F87171" } } },
+      };
+      const moneyCols = new Set([11, 12, 13]); // Amount, Tax, Ex-Tax
+      for (let r = 0; r < diffRows.length; r++) {
+        const styleKey = rowStyles[r];
+        if (!styleKey) continue;
+        const base = styleMap[styleKey];
+        for (let c = 0; c < diffRows[r].length; c++) {
+          const ref = XLSX.utils.encode_cell({ r, c });
+          if (!wsDiff[ref]) continue;
+          const s = JSON.parse(JSON.stringify(base));
+          if (moneyCols.has(c)) {
+            s.numFmt = "$#,##0.00;[Red]-$#,##0.00";
+          }
+          wsDiff[ref].s = s;
+        }
+      }
+      XLSX.utils.book_append_sheet(wb, wsDiff, "Differences");
+
+      const today = new Date();
+      const stamp = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+      const filterTag = (currentVisible.length !== flaggedReceipts.length) ? "-filtered" : "";
+      XLSX.writeFile(wb, `revenue-by-payment-type-flagged${filterTag}-${stamp}.xlsx`);
+    });
+
+    [searchBox, dateFilter, clubFilter, bonusFilter].forEach((el) => {
+      el.addEventListener("input", renderResults);
+      el.addEventListener("change", renderResults);
+    });
+  </script>
+</body>
+</html>

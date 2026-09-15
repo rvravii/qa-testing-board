@@ -1338,11 +1338,28 @@
         <button class="info-modal-close" type="button" data-info-close aria-label="Close">✕</button>
       </div>
       <div class="info-modal-body">
-        <p>AJE is built from DRDR. We check:</p>
-        <p>(1) AJE <strong>Debit = Credit</strong>.<br>
-        (2) Each <strong>Profit Center</strong> (ABC Member Billing + Collect at Club) vs AJE revenue credit.<br>
-        (3) Each <strong>Deduction</strong> line vs AJE expense.<br>
-        (4) <strong>Total Deposited</strong> vs AJE DEPOSITS debit — All Locations + club-wise.</p>
+        <h4>What this report does</h4>
+        <p>Validates the <strong>Accounting Journal Entries (AJE)</strong> standard export against its <strong>parent report DRDR</strong>. Every AJE line ultimately flows from DRDR, so this catches (a) internal Debit/Credit imbalance and (b) any drift between DRDR sections and their AJE contribution — club-by-club.</p>
+
+        <h4>Old (manual) process</h4>
+        <ul>
+          <li>Export AJE and DRDR separately.</li>
+          <li>Verify Debit = Credit in AJE at report level.</li>
+          <li>For each DRDR section (Revenue by Payment Type, Refunds, Adjustments…), manually filter AJE and pivot to match against the DRDR total.</li>
+          <li>Repeat per club. Time-consuming, error-prone; effectively impossible at 100% coverage.</li>
+        </ul>
+
+        <h4>What the board does</h4>
+        <ol>
+          <li>Confirms total <strong>Debit vs Credit</strong> at the report level.</li>
+          <li>For every <strong>Profit Center</strong> (ABC Member Billing + Collect at Club) → matches against AJE revenue credit.</li>
+          <li>For every <strong>Deduction</strong> line → matches against AJE expense.</li>
+          <li>Reconciles <strong>Total Deposited</strong> against AJE DEPOSITS debit — All Locations + club-wise.</li>
+          <li>Flags mismatches with the exact club, section, expected vs actual, and delta.</li>
+        </ol>
+
+        <h4>Tolerance</h4>
+        <p>Amount tolerance: <strong>$0.01</strong> per row / section total.</p>
       </div>
     </div>
   </div>

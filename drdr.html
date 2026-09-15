@@ -958,8 +958,25 @@
         <button class="info-modal-close" type="button" data-info-close aria-label="Close">✕</button>
       </div>
       <div class="info-modal-body">
-        <p><strong>Daily Revenue &amp; Deposit Reconciliation</strong> — field-level totals vs grand totals, All Locations summary, and club-wise checks with filters.</p>
-        <p>DRDR is the <strong>parent report of AJE</strong>, so any DRDR error propagates downstream. Upload the DRDR export and the board runs the summary check for every club and the field-vs-total check for every applicable row.</p>
+        <h4>What this report does</h4>
+        <p>Validates the <strong>Daily Revenue &amp; Deposit Reconciliation (DRDR)</strong> report at two levels. DRDR is the <strong>parent report of AJE</strong>, so any DRDR error propagates downstream — catching it here prevents chained failures.</p>
+
+        <h4>Old (manual) process</h4>
+        <ul>
+          <li>Export DRDR, filter club-by-club, reconcile each section against its underlying rows.</li>
+          <li>Cross-check the "total" field on each row against a manually computed sum.</li>
+          <li>Very tedious across many clubs — usually only spot-checked.</li>
+        </ul>
+
+        <h4>What the board does</h4>
+        <ol>
+          <li><strong>Summary check</strong> — for every <code>(Club, Section)</code>, verifies <code>SUM(section rows) == section total</code> (tolerance $0.01).</li>
+          <li><strong>Field vs Total check</strong> — for every row that carries a "total" field, verifies the total equals the arithmetic sum of contributing amounts.</li>
+          <li>Filters by club or section; exports XLSX evidence with the exact contributing rows for each mismatch.</li>
+        </ol>
+
+        <h4>Why this matters</h4>
+        <p>A DRDR mismatch means the source-of-truth for downstream AJE is already wrong — this report catches it before the AJE cycle even starts.</p>
       </div>
     </div>
   </div>

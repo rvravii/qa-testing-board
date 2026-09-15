@@ -1205,8 +1205,28 @@
         <button class="info-modal-close" type="button" data-info-close aria-label="Close">✕</button>
       </div>
       <div class="info-modal-body">
-        <p>Agreement-level duplicate check for Past Due Member Detail.</p>
-        <p>Same agreement with different Profit Centers is <strong>not</strong> a duplicate — duplicate only when <strong>Agreement # + Due Date + Profit Center + Past Due Amount</strong> match (or the full row matches).</p>
+        <h4>What this report does</h4>
+        <p>Validates the <strong>Past Due Member Detail</strong> (PF Custom) report by detecting duplicate past-due entries — the same agreement carrying multiple past-due rows that share the same due date, profit center, and amount (i.e. the same debt reported more than once).</p>
+
+        <h4>Old (manual) process</h4>
+        <ul>
+          <li>Sort the export by Agreement, Due Date, Profit Center, Amount.</li>
+          <li>Eye-check for repeated rows.</li>
+          <li>Practically impossible at scale — systemic duplicate patterns often reached collections before being noticed.</li>
+        </ul>
+
+        <h4>What the board does</h4>
+        <ul>
+          <li>Groups rows by <code>(Agreement, Due Date, Profit Center, Amount)</code>.</li>
+          <li>Flags any group with more than one row as a duplicate.</li>
+          <li>Same agreement with <em>different</em> Profit Centers is <strong>not</strong> a duplicate (legitimate multi-service due).</li>
+          <li>Provides a summary view + club-wise breakdown.</li>
+          <li>Agreement drill-down — one click to see every past-due row on that agreement.</li>
+          <li>Filter by Club, Profit Center, search text.</li>
+        </ul>
+
+        <h4>Match key</h4>
+        <p><code>Agreement # + Due Date + Profit Center + Past Due Amount</code> — amount rounded to 2 decimals, Profit Center case-insensitive.</p>
       </div>
     </div>
   </div>

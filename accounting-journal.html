@@ -1367,8 +1367,28 @@
         <button class="info-modal-close" type="button" data-info-close aria-label="Close">✕</button>
       </div>
       <div class="info-modal-body">
-        <p><strong>1) Journal Excel</strong> — single-column Amount must net to <strong>$0.00</strong> (section / description drilldown).</p>
-        <p><strong>2) Org file (AJE.csv)</strong> — see which <strong>Organization</strong> is off $0.00, then download per-org Excel: <code>AJE Adjustment File June 2026 - G0000.xlsx</code>.</p>
+        <h4>What this report does</h4>
+        <p>At end-of-month, verifies the <strong>Accounting Journal Entries</strong> report balances to <strong>$0.00</strong> (Debit − Credit) at both organization and group level. When it doesn't balance, generates group-wise <strong>Adjustment Files</strong> for the finance team.</p>
+
+        <h4>Old (manual) process</h4>
+        <ul>
+          <li>Run SQL queries per group to identify out-of-balance amounts.</li>
+          <li>For every group (typically ~38 groups — G0001 with 28 clubs, G0002 with 30+ clubs, …), build a <strong>separate Excel file</strong> containing only that group's clubs.</li>
+          <li>Distribute those files to the finance / accounting team for reconciliation.</li>
+          <li>Highly repetitive — a single EOM cycle could take a full day of file-wrangling.</li>
+        </ul>
+
+        <h4>What the board does</h4>
+        <ol>
+          <li><strong>Journal Excel</strong> — single-column Amount must net to <strong>$0.00</strong> at the organization level. Section / description drilldown shown when off.</li>
+          <li><strong>Org file (AJE.csv)</strong> — identifies which Organization is off $0.00.</li>
+          <li>Slices data <strong>automatically per group</strong> (G0001, G0002, …) — no manual filtering.</li>
+          <li>Emits a downloadable <strong>AJE Adjustment File</strong> per group in the accounting team's existing template: <code>AJE Adjustment File June 2026 - G0000.xlsx</code>.</li>
+          <li>Filter by group / status; download individual group files with a single click, or "Download all" for the full set.</li>
+        </ol>
+
+        <h4>Why this matters</h4>
+        <p>Turns a full day of manual SQL + Excel filtering into a single upload + a few clicks; the accounting team gets the exact same file format they already work with.</p>
       </div>
     </div>
   </div>

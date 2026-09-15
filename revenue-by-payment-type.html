@@ -750,12 +750,31 @@
         <button class="info-modal-close" type="button" data-info-close aria-label="Close">✕</button>
       </div>
       <div class="info-modal-body">
-        <p>Detects receipts where the same payment appears as both <strong style="color:var(--bad)">UNAPPLIED PAYMENT</strong> and applied lines (LATE / SERVICE FEES, DIGX, dues, etc.). Groups results by <strong>Payment Date</strong>, so multi-day exports are supported.</p>
-        <p><strong>Rule:</strong> group rows by <strong>Receipt Number</strong>; flag any receipt that has BOTH a <em>UNAPPLIED PAYMENT</em> Profit Center row AND at least one row with a different Profit Center — the payment appears to be applied, so unapplied is likely a data issue.</p>
-        <p><strong>Bonus checks</strong>:
-          <span class="tag t-b2">B2 · Unapplied amount matches an applied line</span>
-          <span class="tag t-b3">B3 · Agreement leading-zero variant</span>
-        </p>
+        <h4>What this report does</h4>
+        <p>Detects receipts where the same payment appears as both an <strong style="color:var(--bad)">UNAPPLIED PAYMENT</strong> line <em>and</em> an applied line (LATE / SERVICE FEES, DIGX, dues, etc.) — meaning the money is actually booked, but is still being reported as unapplied. This is a downstream reporting bug.</p>
+
+        <h4>Old (manual) process</h4>
+        <ul>
+          <li>Export Revenue By Payment Type — usually only one day at a time.</li>
+          <li>Manually sort by Receipt Number and eyeball each receipt for UNAPPLIED + Applied coexistence.</li>
+          <li>Practically impossible for multi-day / multi-club exports — many issues slipped to production.</li>
+        </ul>
+
+        <h4>What the board does</h4>
+        <ul>
+          <li>Auto-detects the header row and parses the file (single day, one month, or full year).</li>
+          <li>Groups rows by <strong>Receipt Number</strong>.</li>
+          <li>Flags any receipt with an <code>UNAPPLIED PAYMENT</code> row AND a non-UNAPPLIED row.</li>
+          <li>Groups results by <strong>Payment Date</strong> for multi-day exports.</li>
+          <li>Dynamic KPIs — filters (date / club / bonus flag / search) update all counts live.</li>
+          <li>Exports a styled XLSX evidence file with two sheets — Summary + Differences.</li>
+        </ul>
+
+        <h4>Bonus checks (per flagged receipt)</h4>
+        <ul>
+          <li><span class="tag t-b2">B2 · Amount exact match</span> — an UNAPPLIED amount equals an Applied amount on the same receipt (to the cent). Strong signal the money was already booked.</li>
+          <li><span class="tag t-b3">B3 · Agreement leading-zero variant</span> — UNAPPLIED and Applied rows carry agreement numbers that differ only by leading / embedded zeros.</li>
+        </ul>
       </div>
     </div>
   </div>

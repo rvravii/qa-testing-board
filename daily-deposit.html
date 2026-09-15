@@ -1334,8 +1334,29 @@
         <button class="info-modal-close" type="button" data-info-close aria-label="Close">✕</button>
       </div>
       <div class="info-modal-body">
-        <p>Upload one or more monthly Excel exports. The dashboard checks <strong>Starting Balance</strong> through Deposit against <strong>Ending Balance</strong> and shows only mismatch days.</p>
-        <p>Supports single month or multiple months (bulk). Any range is fine — from a single day to multi-year. Data-refresh gaps are flagged as <em>refresh-gap</em>, arithmetic mismatches as <em>chain break</em>.</p>
+        <h4>What this dashboard does</h4>
+        <p>Detects dates where the <strong>Daily Deposit Analysis</strong> dashboard has stale or unrefreshed settlement data by validating the daily balance chain:</p>
+        <p style="background: rgba(15, 23, 42, 0.55); padding: 8px 12px; border-radius: 8px; font-family: monospace; font-size: 0.85rem; color: #7dd3fc;">Starting Balance + Collections − Refunds ± Adjustments = Ending Balance</p>
+        <p>Any date whose chain breaks is very likely a <strong>data-refresh</strong> issue (Settlement pipeline did not update) rather than a business anomaly.</p>
+
+        <h4>Old (manual) process</h4>
+        <ul>
+          <li>Suspect a date range and export the dashboard's data for that range.</li>
+          <li>Load into Excel, pivot Settlement type by day, manually check the chain per row.</li>
+          <li>Practical only for a narrow window (a few days). For monthly / quarterly / annual QA, we sampled — many stale-refresh dates slipped through.</li>
+        </ul>
+
+        <h4>What the dashboard does now</h4>
+        <ul>
+          <li>Accepts <strong>any range</strong> — 1 day, 1 month, 1 year, multi-year.</li>
+          <li>Reconstructs the Settlement type × Date grid.</li>
+          <li>Computes the expected Ending Balance for each row and compares to the reported Ending Balance.</li>
+          <li>Flags <strong>chain-break</strong> (arithmetic mismatch) vs <strong>refresh-gap</strong> (Starting Balance for day N ≠ Ending Balance for day N−1).</li>
+          <li>Filter by Settlement type / Month / Date / search; export XLSX evidence.</li>
+        </ul>
+
+        <h4>Tolerance</h4>
+        <p>Amount tolerance: <strong>$0.01</strong>.</p>
       </div>
     </div>
   </div>

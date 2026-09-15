@@ -900,10 +900,31 @@
         <button class="info-modal-close" type="button" data-info-close aria-label="Close">✕</button>
       </div>
       <div class="info-modal-body">
-        <p>Duplicate check for All Members Detail.</p>
-        <p><strong>Primary + Secondary on the same agreement are normal</strong> (family members) — not duplicates.</p>
-        <p>Actual duplicate = same person appears more than once: <strong>Agreement # + First Name + Last Name + Date of Birth</strong>.</p>
-        <p>Active / Inactive are split using <em>Member Active/Inactive</em>; Active-only files are fine.</p>
+        <h4>What this report does</h4>
+        <p>Validates the <strong>All Members</strong> export for two things:</p>
+        <ol>
+          <li>The <strong>Active / Inactive split</strong> is correct (Active-only files are supported too).</li>
+          <li>There are <strong>no same-person duplicates</strong> — where "same person" = <em>Agreement # + First Name + Last Name + Date of Birth</em>, excluding Family Primary/Secondary which legitimately share an agreement.</li>
+        </ol>
+
+        <h4>Old (manual) process</h4>
+        <ul>
+          <li>Export All Members, sort by Agreement then Name / DOB.</li>
+          <li>Eye-check for repeated rows and mentally exclude Family Primary / Secondary.</li>
+          <li>Exhausting and inconsistent on large clubs / bulk exports.</li>
+        </ul>
+
+        <h4>What the board does</h4>
+        <ul>
+          <li>Computes Active vs Inactive split from the <em>Member Active/Inactive</em> column.</li>
+          <li>Groups rows by <code>(Agreement, Name, DOB)</code> and flags any group with more than one non-Family-Secondary row.</li>
+          <li>Excludes Family Primary + Secondary combinations on the same agreement (legitimate share).</li>
+          <li>Case-insensitive name comparison after trimming / space collapse.</li>
+          <li>Drill into a duplicate group to see every contributing row.</li>
+        </ul>
+
+        <h4>Why this matters</h4>
+        <p>Same-person duplicates inflate active-member counts and Revenue-per-Member metrics on every downstream dashboard.</p>
       </div>
     </div>
   </div>

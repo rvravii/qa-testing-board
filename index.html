@@ -9,19 +9,19 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <style>
     :root {
-      --bg: #070b14;
-      --bg-2: #0c1220;
-      --sidebar: #0a1020;
-      --panel: #111827;
-      --panel-2: #151d2e;
-      --line: #243044;
-      --text: #f3f6fb;
-      --muted: #9aa8bf;
+      --bg: #0f172a;
+      --bg-2: #1a2236;
+      --sidebar: #131f38;
+      --panel: #1e293b;
+      --panel-2: #253449;
+      --line: #334155;
+      --text: #f1f5f9;
+      --muted: #94a3b8;
       --blue: #3b82f6;
       --blue-2: #2563eb;
-      --blue-soft: rgba(59, 130, 246, 0.16);
+      --blue-soft: rgba(59, 130, 246, 0.18);
       --blue-glow: rgba(59, 130, 246, 0.35);
-      --ok: #34d399;
+      --ok: #6ee7b7;
       --warn: #fbbf24;
       --radius: 14px;
       --font: Inter, system-ui, sans-serif;
@@ -616,9 +616,9 @@
           { id: "revenue-by-payment-type", title: "Revenue By Payment Type", desc: "Flags receipts with UNAPPLIED + Applied lines together, with amount-match & agreement leading-zero checks." },
         ],
       },
-      "aje-standard": { embed: "aje-standard.html?v=2" },
-      "all-members": { embed: "all-members.html?v=1" },
-      "revenue-by-payment-type": { embed: "revenue-by-payment-type.html?v=2" },
+      "aje-standard": { embed: "aje-standard.html?v=3" },
+      "all-members": { embed: "all-members.html?v=3" },
+      "revenue-by-payment-type": { embed: "revenue-by-payment-type.html?v=3" },
       dashboards: {
         kicker: "DASHBOARDS",
         title: "Dashboards",
@@ -628,7 +628,6 @@
           { id: "new-joins", title: "New Joins Analysis", desc: "New joins dashboard placeholder for upcoming logic." },
         ],
       },
-      "daily-deposit": { embed: "daily-deposit.html" },
       "new-joins": {
         kicker: "DASHBOARDS",
         title: "New Joins Analysis",
@@ -645,9 +644,9 @@
           { id: "accounting-journal", title: "Accounting Journal Entries", desc: "Journal $0.00 balance check + org out-of-balance files (AJE Adjustment File download)." },
         ],
       },
-      "eft-allocation": { embed: "eft-allocation.html?v=20260804a" },
-      "eft-annual": { embed: "eft-allocation-annual.html?v=20260804a" },
-      "accounting-journal": { embed: "accounting-journal.html?v=1" },
+      "eft-allocation": { embed: "eft-allocation.html?v=20260915" },
+      "eft-annual": { embed: "eft-allocation-annual.html?v=20260915" },
+      "accounting-journal": { embed: "accounting-journal.html?v=3" },
       "pf-reports": {
         kicker: "PF CUSTOM REPORTS",
         title: "PF Custom Reports",
@@ -656,8 +655,9 @@
           { id: "past-due-member", title: "Past Due Member Detail", desc: "Agreement-level duplicate check (agr + due date + profit center + amount), summary + club-wise." },
         ],
       },
-      drdr: { embed: "drdr.html?v=1" },
-      "past-due-member": { embed: "past-due-member.html?v=2" },
+      drdr: { embed: "drdr.html?v=3" },
+      "past-due-member": { embed: "past-due-member.html?v=3" },
+      "daily-deposit": { embed: "daily-deposit.html?v=3" },
     };
 
     const main = document.getElementById("main");

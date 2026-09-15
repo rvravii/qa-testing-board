@@ -7,16 +7,22 @@
   <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
   <style>
     :root {
-      --bg: #0b1220;
-      --panel: #111827;
-      --panel2: #0f172a;
-      --line: #1f2937;
-      --text: #e5e7eb;
+      --bg: #0f172a;
+      --panel: #1e293b;
+      --panel2: #172033;
+      --line: #334155;
+      --text: #f1f5f9;
       --muted: #94a3b8;
       --accent: #38bdf8;
-      --ok: #22c55e;
-      --bad: #ef4444;
-      --warn: #f59e0b;
+      --ok: #6ee7b7;
+      --bad: #f87171;
+      --warn: #fbbf24;
+      --status-pass-bg: rgba(110, 231, 183, 0.14);
+      --status-pass-border: rgba(110, 231, 183, 0.4);
+      --status-fail-bg: rgba(248, 113, 113, 0.16);
+      --status-fail-border: rgba(248, 113, 113, 0.45);
+      --status-pending-bg: rgba(251, 191, 36, 0.16);
+      --status-pending-border: rgba(251, 191, 36, 0.45);
     }
     * { box-sizing: border-box; }
     body {
@@ -120,15 +126,49 @@
       .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .upload-grid { grid-template-columns: 1fr; }
     }
+
+    /* ============ Info widget (i) — shared pattern ============ */
+    .title-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
+    .title-row h1 { margin: 0; }
+    .info-btn {
+      width: 26px; height: 26px; border-radius: 999px;
+      border: 1.5px solid rgba(147, 197, 253, 0.55);
+      background: rgba(59, 130, 246, 0.14);
+      color: #93c5fd; font-family: 'Georgia', 'Times New Roman', serif;
+      font-style: italic; font-weight: 700; font-size: 15px;
+      cursor: pointer; display: inline-grid; place-items: center;
+      transition: transform 0.15s ease, background 0.15s ease, border-color 0.15s ease;
+      padding: 0; line-height: 1;
+    }
+    .info-btn::before { content: 'i'; }
+    .info-btn:hover { background: rgba(59, 130, 246, 0.28); border-color: #60a5fa; color: #dbeafe; transform: scale(1.08); }
+    .info-btn:focus-visible { outline: 2px solid #60a5fa; outline-offset: 2px; }
+    .info-modal {
+      position: fixed; inset: 0; display: none; z-index: 9999;
+      background: rgba(2, 6, 23, 0.72); backdrop-filter: blur(4px);
+      align-items: center; justify-content: center; padding: 24px;
+    }
+    .info-modal.open { display: flex; }
+    .info-modal-content {
+      max-width: 640px; width: 100%; max-height: 82vh; overflow-y: auto;
+      background: linear-gradient(180deg, #1e293b, #172033);
+      border: 1px solid #334155; border-radius: 16px; padding: 22px;
+      color: #e2e8f0; box-shadow: 0 20px 60px rgba(0, 0, 0, 0.55);
+    }
+    .info-modal-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; padding-bottom: 12px; border-bottom: 1px solid #334155; }
+    .info-modal-head h3 { margin: 0; font-size: 1.05rem; color: #93c5fd; font-weight: 700; }
+    .info-modal-close { border: none; background: transparent; color: #94a3b8; font-size: 20px; cursor: pointer; padding: 4px 10px; border-radius: 8px; line-height: 1; }
+    .info-modal-close:hover { background: rgba(148, 163, 184, 0.14); color: #f1f5f9; }
+    .info-modal-body { font-size: 0.9rem; line-height: 1.65; color: #cbd5e1; }
+    .info-modal-body p { margin: 0 0 10px; }
+    .info-modal-body strong { color: #f1f5f9; }
   </style>
 </head>
 <body>
   <div class="wrap">
-    <h1>Accounting Journal Entries <span class="badge-ver">Version 1</span></h1>
-    <div class="sub">
-      1) Journal Excel — single-column Amount must net to <strong>$0.00</strong> (section / description drilldown).
-      2) Org file (AJE.csv) — see which <strong>Organization</strong> is off $0.00, then download
-      per-org Excel: <code>AJE Adjustment File June 2026 - G0000.xlsx</code>.
+    <div class="title-row">
+      <h1>Accounting Journal Entries</h1>
+      <button class="info-btn" type="button" data-info-open aria-label="How this report works"></button>
     </div>
 
     <div class="card">
@@ -1308,6 +1348,29 @@
       document.getElementById(id).addEventListener("change", renderOrgs);
     });
     downloadAllOrgBtn.addEventListener("click", () => downloadAllImbalancedOrgs());
+
+    // ============ Info modal wiring ============
+    (function () {
+      const modal = document.getElementById("infoModal");
+      if (!modal) return;
+      document.querySelectorAll("[data-info-open]").forEach((b) => b.addEventListener("click", () => modal.classList.add("open")));
+      document.querySelectorAll("[data-info-close]").forEach((b) => b.addEventListener("click", () => modal.classList.remove("open")));
+      modal.addEventListener("click", (e) => { if (e.target === modal) modal.classList.remove("open"); });
+      document.addEventListener("keydown", (e) => { if (e.key === "Escape") modal.classList.remove("open"); });
+    })();
   </script>
+
+  <div class="info-modal" id="infoModal" role="dialog" aria-modal="true" aria-labelledby="infoTitle">
+    <div class="info-modal-content">
+      <div class="info-modal-head">
+        <h3 id="infoTitle">How this report works</h3>
+        <button class="info-modal-close" type="button" data-info-close aria-label="Close">✕</button>
+      </div>
+      <div class="info-modal-body">
+        <p><strong>1) Journal Excel</strong> — single-column Amount must net to <strong>$0.00</strong> (section / description drilldown).</p>
+        <p><strong>2) Org file (AJE.csv)</strong> — see which <strong>Organization</strong> is off $0.00, then download per-org Excel: <code>AJE Adjustment File June 2026 - G0000.xlsx</code>.</p>
+      </div>
+    </div>
+  </div>
 </body>
 </html>

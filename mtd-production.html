@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MTD Production — ABC Insights QA</title>
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --panel: #1e293b;
+      --panel2: #172033;
+      --line: #334155;
+      --text: #f1f5f9;
+      --muted: #94a3b8;
+      --accent: #38bdf8;
+      --ok: #6ee7b7;
+      --bad: #f87171;
+      --warn: #fbbf24;
+      --status-pass-bg: rgba(110, 231, 183, 0.14);
+      --status-pass-border: rgba(110, 231, 183, 0.4);
+      --status-fail-bg: rgba(248, 113, 113, 0.16);
+      --status-fail-border: rgba(248, 113, 113, 0.45);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      background: radial-gradient(1200px 600px at 10% -10%, #1e293b 0%, var(--bg) 55%);
+      color: var(--text);
+    }
+    .wrap { max-width: 1280px; margin: 0 auto; padding: 28px 20px 60px; }
+    h1 { margin: 0; font-size: 1.55rem; }
+    .title-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
+    .card {
+      background: linear-gradient(180deg, var(--panel), var(--panel2));
+      border: 1px solid var(--line); border-radius: 14px; padding: 16px; margin-bottom: 14px;
+    }
+    .note { color: var(--muted); font-size: 0.86rem; line-height: 1.5; }
+    .meta { color: var(--muted); font-size: 0.84rem; margin-top: 8px; }
+    .upload-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-top: 12px; }
+    .btn {
+      background: var(--accent); color: #082f49; border: 0; border-radius: 10px;
+      padding: 10px 14px; font-weight: 700; cursor: pointer;
+    }
+    .btn.ghost { background: transparent; color: var(--text); border: 1px solid var(--line); }
+    .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+    .kpis { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; margin-top: 12px; }
+    .kpi { background: #0b1324; border: 1px solid var(--line); border-radius: 12px; padding: 12px; }
+    .kpi .l { color: var(--muted); font-size: 0.72rem; font-weight: 600; }
+    .kpi .v { font-size: 1.3rem; font-weight: 800; margin-top: 4px; }
+    .kpi .hint { color: var(--muted); font-size: 0.72rem; margin-top: 4px; }
+    .ok { color: var(--ok); } .bad { color: var(--bad); } .warn { color: var(--warn); }
+    .pill {
+      display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 0.72rem; font-weight: 700;
+    }
+    .pill.ok { background: var(--status-pass-bg); color: var(--ok); border: 1px solid var(--status-pass-border); }
+    .pill.bad { background: var(--status-fail-bg); color: var(--bad); border: 1px solid var(--status-fail-border); }
+    .pill.warn { background: rgba(251, 191, 36, 0.16); color: var(--warn); border: 1px solid rgba(251, 191, 36, 0.45); }
+    .pill.info { background: rgba(59, 130, 246, 0.14); color: #93c5fd; border: 1px solid rgba(59, 130, 246, 0.35); }
+    table { width: 100%; border-collapse: collapse; font-size: 0.86rem; }
+    th, td { padding: 9px 8px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+    th { color: var(--muted); font-weight: 600; position: sticky; top: 0; background: #0f172a; }
+    .table-wrap { overflow: auto; max-height: 520px; margin-top: 10px; border: 1px solid var(--line); border-radius: 10px; }
+    .miss-chip {
+      display: inline-block; margin: 2px 4px 2px 0; padding: 2px 8px; border-radius: 6px;
+      background: var(--status-fail-bg); color: #fecaca; border: 1px solid var(--status-fail-border);
+      font-size: 0.75rem; font-variant-numeric: tabular-nums;
+    }
+    .legend-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+    .legend-box { background: #0b1324; border: 1px solid var(--line); border-radius: 10px; padding: 12px; }
+    .legend-box h3 { margin: 0 0 6px; font-size: 0.9rem; color: #93c5fd; }
+    .progress { height: 6px; background: #0b1324; border-radius: 999px; overflow: hidden; margin-top: 10px; }
+    .progress > div { height: 100%; background: var(--accent); width: 0%; transition: width 0.15s; }
+    .hidden { display: none; }
+    .banner {
+      border-radius: 12px; padding: 12px 14px; margin-bottom: 12px; border: 1px solid var(--line);
+      background: #0b1324; font-size: 0.9rem; line-height: 1.45;
+    }
+    .banner.fail { border-color: rgba(248, 113, 113, 0.45); background: var(--status-fail-bg); }
+    .banner.pass { border-color: rgba(110, 231, 183, 0.4); background: var(--status-pass-bg); }
+    .info-btn {
+      width: 26px; height: 26px; border-radius: 999px; border: 1.5px solid rgba(147, 197, 253, 0.55);
+      background: rgba(59, 130, 246, 0.14); color: #93c5fd; font-family: Georgia, serif;
+      font-style: italic; font-weight: 700; font-size: 15px; cursor: pointer;
+      display: inline-grid; place-items: center; padding: 0;
+    }
+    .info-btn::before { content: 'i'; }
+    .info-modal {
+      position: fixed; inset: 0; display: none; z-index: 9999;
+      background: rgba(2, 6, 23, 0.72); align-items: center; justify-content: center; padding: 24px;
+    }
+    .info-modal.open { display: flex; }
+    .info-modal-content {
+      max-width: 640px; width: 100%; max-height: 82vh; overflow-y: auto;
+      background: linear-gradient(180deg, #1e293b, #172033); border: 1px solid #334155;
+      border-radius: 16px; padding: 22px;
+    }
+    .info-modal-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px solid #334155; }
+    .info-modal-head h3 { margin: 0; color: #93c5fd; }
+    .info-modal-close { border: 0; background: transparent; color: #94a3b8; font-size: 20px; cursor: pointer; }
+    .info-modal-body { color: #cbd5e1; font-size: 0.9rem; line-height: 1.65; }
+    .info-modal-body h4 { margin: 14px 0 6px; color: #bfdbfe; font-size: 0.95rem; }
+    .info-modal-body ul { margin: 0 0 10px 18px; padding: 0; }
+    @media (max-width: 900px) {
+      .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .legend-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="title-row">
+      <h1>MTD Production</h1>
+      <button class="info-btn" type="button" data-info-open aria-label="How this report works"></button>
+    </div>
+
+    <div class="card">
+      <div class="note">
+        Upload the <strong>MTD Production</strong> workbook. v1 check: on every club tab, date-wise sections
+        (<strong>IN CLUB JOINS</strong>, <strong>VOLUNTARY CANCELS</strong>, <strong>Transfers In</strong>
+        must include every calendar day in the MTD window (no missing dates).
+      </div>
+      <div class="upload-row">
+        <input type="file" id="fileInput" accept=".xlsx,.xls,.xlsm" />
+        <button class="btn" id="runBtn" type="button" disabled>Run missing-date check</button>
+        <button class="btn ghost" id="exportBtn" type="button" disabled>Export findings CSV</button>
+      </div>
+      <div class="progress hidden" id="progressWrap"><div id="progressBar"></div></div>
+      <div class="meta" id="fileMeta">Waiting for MTD Production Excel…</div>
+    </div>
+
+    <div class="card">
+      <div class="note" style="margin-bottom:4px"><strong>Legend impact (from workbook)</strong></div>
+      <div class="legend-grid">
+        <div class="legend-box">
+          <h3>Daily Summary</h3>
+          <div class="note">What occurred <em>yesterday</em> — club rollup (Gross Invoices, Joins by membership type).</div>
+        </div>
+        <div class="legend-box">
+          <h3>Summary</h3>
+          <div class="note">What has occurred <em>month to date</em> — same metrics, MTD view.</div>
+        </div>
+        <div class="legend-box">
+          <h3>Club tabs (1, 6, 44…)</h3>
+          <div class="note">Date-wise detail for Joins / Cancels / Transfers / Check-Ins. <strong>Missing dates here understate MTD production.</strong></div>
+        </div>
+        <div class="legend-box">
+          <h3>Why this check matters</h3>
+          <div class="note">A gap in club date rows means joins/cancels for that day never feed Daily Summary / Summary totals.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card hidden" id="resultsCard">
+      <div id="statusBanner" class="banner"></div>
+      <div class="kpis">
+        <div class="kpi">
+          <div class="l">Club tabs</div>
+          <div class="v" id="kpiClubs">—</div>
+          <div class="hint">Scanned (excl. Legend / Summary)</div>
+        </div>
+        <div class="kpi">
+          <div class="l">MTD window</div>
+          <div class="v" id="kpiWindow" style="font-size:1rem">—</div>
+          <div class="hint">Min → max date in file</div>
+        </div>
+        <div class="kpi">
+          <div class="l">Expected days</div>
+          <div class="v" id="kpiDays">—</div>
+          <div class="hint">Calendar days in window</div>
+        </div>
+        <div class="kpi">
+          <div class="l">Clubs OK</div>
+          <div class="v ok" id="kpiOk">—</div>
+          <div class="hint">Full date coverage</div>
+        </div>
+        <div class="kpi">
+          <div class="l">Missing dates</div>
+          <div class="v bad" id="kpiBad">—</div>
+          <div class="hint">Clubs with gaps</div>
+        </div>
+      </div>
+
+      <h2 style="margin:18px 0 8px; font-size:1.05rem">Highlighted clubs — missing dates</h2>
+      <div class="meta" id="filterMeta"></div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Club</th>
+              <th>Section</th>
+              <th>Have</th>
+              <th>Expected</th>
+              <th>Missing dates</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="findingsBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="info-modal" id="infoModal" role="dialog" aria-modal="true">
+    <div class="info-modal-content">
+      <div class="info-modal-head">
+        <h3>How this report works</h3>
+        <button class="info-modal-close" type="button" data-info-close>✕</button>
+      </div>
+      <div class="info-modal-body">
+        <h4>What this report does</h4>
+        <p>Validates the <strong>MTD Production</strong> export for date continuity on every club tab.</p>
+        <h4>v1 check (now)</h4>
+        <ul>
+          <li>Read all club sheets (numeric tab names).</li>
+          <li>For sections <code>IN CLUB JOINS</code>, <code>VOLUNTARY CANCELS</code>, <code>Transfers In</code> — collect Date rows.</li>
+          <li>Build expected calendar from global min→max date in the file.</li>
+          <li>Highlight any club/section where a day is missing.</li>
+        </ul>
+        <h4>Later enhancements</h4>
+        <ul>
+          <li>Check-Ins / Web Joins / other sections</li>
+          <li>Legend-driven metric impact flags</li>
+          <li>Daily Summary vs club-tab rollup parity</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const SKIP = new Set(["Legend", "Summary Legend", "Daily Summary", "Summary"]);
+    const TRACKED = ["IN CLUB JOINS", "VOLUNTARY CANCELS", "Transfers In"];
+
+    const fileInput = document.getElementById("fileInput");
+    const runBtn = document.getElementById("runBtn");
+    const exportBtn = document.getElementById("exportBtn");
+    const fileMeta = document.getElementById("fileMeta");
+    const progressWrap = document.getElementById("progressWrap");
+    const progressBar = document.getElementById("progressBar");
+
+    let buf = null;
+    let fileName = "";
+    let result = null;
+
+    function setProgress(p) {
+      progressWrap.classList.remove("hidden");
+      progressBar.style.width = Math.max(0, Math.min(100, p)) + "%";
+    }
+
+    function excelDate(v) {
+      if (v instanceof Date && !isNaN(v)) {
+        return new Date(Date.UTC(v.getFullYear(), v.getMonth(), v.getDate()));
+      }
+      if (typeof v === "number" && Number.isFinite(v)) {
+        // Excel serial
+        const epoch = Date.UTC(1899, 11, 30);
+        const d = new Date(epoch + Math.round(v) * 86400000);
+        return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+      }
+      if (typeof v === "string" && /^\d{4}-\d{2}-\d{2}/.test(v)) {
+        const [y, m, d] = v.slice(0, 10).split("-").map(Number);
+        return new Date(Date.UTC(y, m - 1, d));
+      }
+      return null;
+    }
+
+    function iso(d) {
+      return d.toISOString().slice(0, 10);
+    }
+
+    function eachDay(start, end) {
+      const out = [];
+      const cur = new Date(start.getTime());
+      while (cur <= end) {
+        out.push(new Date(cur.getTime()));
+        cur.setUTCDate(cur.getUTCDate() + 1);
+      }
+      return out;
+    }
+
+    function parseClubSheet(ws, sheetName) {
+      const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "", raw: true });
+      const sections = {};
+      let current = null;
+      for (let i = 0; i < rows.length; i++) {
+        const c0 = rows[i][0];
+        const c1 = rows[i][1];
+        const next0 = rows[i + 1] ? rows[i + 1][0] : null;
+        if (typeof c1 === "string" && c1.trim() && typeof next0 === "string" && String(next0).trim().toLowerCase() === "date") {
+          current = c1.trim();
+          if (!sections[current]) sections[current] = new Set();
+          continue;
+        }
+        const d = excelDate(c0);
+        if (d && current) sections[current].add(iso(d));
+        if (typeof c0 === "string" && c0.trim().toLowerCase() === "grand total") current = null;
+      }
+      return sections;
+    }
+
+    function analyzeWorkbook(wb) {
+      const clubNames = {};
+      if (wb.SheetNames.includes("Daily Summary")) {
+        const ds = XLSX.utils.sheet_to_json(wb.Sheets["Daily Summary"], { header: 1, defval: "", raw: false });
+        for (const row of ds) {
+          const c = String(row[0] || "").trim();
+          const m = c.match(/^(\d+)\s*-/);
+          if (m) clubNames[m[1]] = c;
+        }
+      }
+
+      const clubSheets = wb.SheetNames.filter((n) => !SKIP.has(n));
+      const allDates = new Set();
+      const clubSections = [];
+
+      for (let i = 0; i < clubSheets.length; i++) {
+        const name = clubSheets[i];
+        setProgress(10 + (70 * (i + 1)) / clubSheets.length);
+        const sections = parseClubSheet(wb.Sheets[name], name);
+        for (const dates of Object.values(sections)) {
+          for (const d of dates) allDates.add(d);
+        }
+        clubSections.push({ sheet: name, sections });
+      }
+
+      if (!allDates.size) throw new Error("No date rows found on club tabs");
+      const sorted = [...allDates].sort();
+      const start = new Date(sorted[0] + "T00:00:00Z");
+      const end = new Date(sorted[sorted.length - 1] + "T00:00:00Z");
+      const expected = eachDay(start, end).map(iso);
+      const expectedSet = new Set(expected);
+
+      const findings = [];
+      let ok = 0;
+      for (const club of clubSections) {
+        let bad = false;
+        for (const sec of TRACKED) {
+          const have = club.sections[sec] || new Set();
+          const missing = expected.filter((d) => !have.has(d));
+          if (missing.length) {
+            bad = true;
+            findings.push({
+              clubId: club.sheet,
+              clubName: clubNames[club.sheet] || club.sheet,
+              section: sec,
+              have: have.size,
+              expected: expected.length,
+              missing,
+            });
+          }
+        }
+        if (!bad) ok += 1;
+      }
+
+      return {
+        fileName,
+        clubTabs: clubSheets.length,
+        periodStart: expected[0],
+        periodEnd: expected[expected.length - 1],
+        expectedDays: expected.length,
+        expected,
+        clubsOk: ok,
+        clubsBad: new Set(findings.map((f) => f.clubId)).size,
+        findings,
+      };
+    }
+
+    function render() {
+      if (!result) return;
+      document.getElementById("resultsCard").classList.remove("hidden");
+      document.getElementById("kpiClubs").textContent = String(result.clubTabs);
+      document.getElementById("kpiWindow").textContent = `${result.periodStart} → ${result.periodEnd}`;
+      document.getElementById("kpiDays").textContent = String(result.expectedDays);
+      document.getElementById("kpiOk").textContent = String(result.clubsOk);
+      document.getElementById("kpiBad").textContent = String(result.clubsBad);
+
+      const banner = document.getElementById("statusBanner");
+      if (result.clubsBad === 0) {
+        banner.className = "banner pass";
+        banner.innerHTML = `<strong class="ok">Pass</strong> — all ${result.clubTabs} clubs have full date coverage for Joins / Cancels / Transfers In (${result.expectedDays} days).`;
+      } else {
+        banner.className = "banner fail";
+        banner.innerHTML = `<strong class="bad">Fail</strong> — <strong>${result.clubsBad}</strong> club(s) have missing date rows. These gaps can understate MTD Production metrics that roll up from club detail.`;
+      }
+
+      document.getElementById("filterMeta").textContent =
+        `${result.findings.length} section finding(s) · highlighted dates are missing from that club tab`;
+
+      const body = document.getElementById("findingsBody");
+      if (!result.findings.length) {
+        body.innerHTML = `<tr><td colspan="6" class="note">No missing dates — all tracked sections complete.</td></tr>`;
+        return;
+      }
+      body.innerHTML = result.findings.map((f) => `
+        <tr>
+          <td><strong>${escapeHtml(f.clubName)}</strong><div class="meta">tab ${escapeHtml(f.clubId)}</div></td>
+          <td>${escapeHtml(f.section)}</td>
+          <td>${f.have}</td>
+          <td>${f.expected}</td>
+          <td>${f.missing.map((d) => `<span class="miss-chip">${d}</span>`).join("")}</td>
+          <td><span class="pill bad">Missing</span></td>
+        </tr>
+      `).join("");
+    }
+
+    function escapeHtml(s) {
+      return String(s)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+    }
+
+    fileInput.addEventListener("change", async () => {
+      const f = fileInput.files?.[0];
+      buf = null; result = null;
+      runBtn.disabled = true; exportBtn.disabled = true;
+      document.getElementById("resultsCard").classList.add("hidden");
+      if (!f) { fileMeta.textContent = "Waiting for MTD Production Excel…"; return; }
+      fileName = f.name;
+      fileMeta.textContent = `Loading ${f.name} (${(f.size / 1024 / 1024).toFixed(1)} MB)…`;
+      try {
+        buf = await f.arrayBuffer();
+        fileMeta.textContent = `Ready: ${f.name}. Click Run missing-date check.`;
+        runBtn.disabled = false;
+      } catch (e) {
+        fileMeta.textContent = `Failed: ${e.message || e}`;
+      }
+    });
+
+    runBtn.addEventListener("click", async () => {
+      if (!buf) return;
+      runBtn.disabled = true;
+      setProgress(5);
+      fileMeta.textContent = `Reading ${fileName}…`;
+      try {
+        await new Promise((r) => setTimeout(r, 0));
+        const wb = XLSX.read(buf, { type: "array", cellDates: true, raw: true });
+        setProgress(10);
+        result = analyzeWorkbook(wb);
+        setProgress(100);
+        render();
+        exportBtn.disabled = result.findings.length === 0 && result.clubsBad > 0 ? false : false;
+        exportBtn.disabled = false;
+        fileMeta.textContent = `Done: ${fileName} — ${result.clubTabs} clubs · ${result.clubsBad} with missing dates · window ${result.periodStart} → ${result.periodEnd}`;
+      } catch (e) {
+        console.error(e);
+        fileMeta.textContent = `Check failed: ${e.message || e}`;
+      } finally {
+        runBtn.disabled = false;
+        setTimeout(() => progressWrap.classList.add("hidden"), 400);
+      }
+    });
+
+    exportBtn.addEventListener("click", () => {
+      if (!result) return;
+      const rows = [["Club ID", "Club Name", "Section", "Have", "Expected", "Missing Dates"]];
+      for (const f of result.findings) {
+        rows.push([f.clubId, f.clubName, f.section, f.have, f.expected, f.missing.join("; ")]);
+      }
+      const ws = XLSX.utils.aoa_to_sheet(rows);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Missing Dates");
+      XLSX.writeFile(wb, `mtd-production-missing-dates-${result.periodEnd}.csv`);
+    });
+
+    (function () {
+      const modal = document.getElementById("infoModal");
+      document.querySelectorAll("[data-info-open]").forEach((b) => b.addEventListener("click", () => modal.classList.add("open")));
+      document.querySelectorAll("[data-info-close]").forEach((b) => b.addEventListener("click", () => modal.classList.remove("open")));
+      modal.addEventListener("click", (e) => { if (e.target === modal) modal.classList.remove("open"); });
+      document.addEventListener("keydown", (e) => { if (e.key === "Escape") modal.classList.remove("open"); });
+    })();
+  </script>
+</body>
+</html>

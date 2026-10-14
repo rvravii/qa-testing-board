@@ -65,6 +65,7 @@
     table { width: 100%; border-collapse: collapse; font-size: 0.86rem; }
     th, td { padding: 9px 8px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
     th { color: var(--muted); font-weight: 600; position: sticky; top: 0; background: #0f172a; }
+    tfoot th { position: sticky; bottom: 0; background: #0f172a; font-weight: 800; color: var(--text); }
     .money { font-variant-numeric: tabular-nums; white-space: nowrap; }
     .hidden { display: none; }
     .section-title { margin: 0 0 8px; font-size: 1.05rem; }
@@ -469,6 +470,54 @@
           </table>
         </div>
         <div id="orgDetailHost" style="margin-top:12px"></div>
+      </div>
+    </div>
+
+    <!-- NEW: Group × Total Out of Balance summary (does not change org-file / adjustment-file logic) -->
+    <div class="card hidden" id="groupSummaryCard">
+      <h2 class="section-title">3. Group Out of Balance summary</h2>
+      <div class="note">
+        Independent download of <strong>Group</strong> and <strong>Total Out of Balance Amount</strong>
+        (same layout as the Excel pivot: G0001, G0002, … plus Grand Total).
+        Existing per-org adjustment files are unchanged.
+      </div>
+      <div class="kpis" style="margin-top:12px;grid-template-columns:repeat(3,minmax(0,1fr))">
+        <div class="kpi">
+          <div class="l">Groups</div>
+          <div class="v" id="gsumKpiCount">—</div>
+          <div class="hint">From the uploaded org / group file</div>
+        </div>
+        <div class="kpi">
+          <div class="l">≠ $0.00</div>
+          <div class="v bad" id="gsumKpiImbal">—</div>
+          <div class="hint">Groups with an out-of-balance amount</div>
+        </div>
+        <div class="kpi">
+          <div class="l">Grand Total</div>
+          <div class="v" id="gsumKpiTotal">—</div>
+          <div class="hint">Sum of Total Out of Balance Amount</div>
+        </div>
+      </div>
+      <div class="upload-row" style="margin-top:14px">
+        <button class="btn" id="downloadGroupSummaryBtn" type="button">Download Group Out of Balance Excel</button>
+      </div>
+      <div class="meta" id="gsumMeta"></div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Group</th>
+              <th>Total Out of Balance Amount</th>
+            </tr>
+          </thead>
+          <tbody id="gsumBody"></tbody>
+          <tfoot>
+            <tr>
+              <th>Grand Total</th>
+              <th class="money" id="gsumGrand">—</th>
+            </tr>
+          </tfoot>
+        </table>
       </div>
     </div>
   </div>
@@ -1298,6 +1347,8 @@
       const f = orgFileInput.files?.[0];
       orgWorkbookBuf = null;
       orgResult = null;
+      const gsc = document.getElementById("groupSummaryCard");
+      if (gsc) gsc.classList.add("hidden");
       runOrgBtn.disabled = true;
       downloadAllOrgBtn.disabled = true;
       if (!f) {
@@ -1331,6 +1382,7 @@
         setProgress(100);
         document.getElementById("resultsCard").classList.remove("hidden");
         renderOrgs();
+        renderGroupSummary();
         showTab("orgs");
         orgFileMeta.textContent =
           `Done: ${orgFileName} — ${orgResult.orgs.length} orgs · ${orgResult.imbalanced.length} ≠ $0.00 · month ${orgResult.reportMonth}`;
@@ -1348,6 +1400,119 @@
       document.getElementById(id).addEventListener("change", renderOrgs);
     });
     downloadAllOrgBtn.addEventListener("click", () => downloadAllImbalancedOrgs());
+
+    /* ——— NEW: Group Out of Balance summary (read-only on orgResult) ——— */
+    function groupSummaryRows() {
+      if (!orgResult) return [];
+      return orgResult.orgs.map((o) => ({
+        group: o.org,
+        total: Number(o.total) || 0,
+        balanced: !!o.balanced,
+      }));
+    }
+
+    function renderGroupSummary() {
+      const card = document.getElementById("groupSummaryCard");
+      const rows = groupSummaryRows();
+      if (!card) return;
+      if (!rows.length) {
+        card.classList.add("hidden");
+        return;
+      }
+      card.classList.remove("hidden");
+      const grand = rows.reduce((s, r) => s + r.total, 0);
+      const imbal = rows.filter((r) => !r.balanced).length;
+      document.getElementById("gsumKpiCount").textContent = String(rows.length);
+      document.getElementById("gsumKpiImbal").textContent = String(imbal);
+      const totalEl = document.getElementById("gsumKpiTotal");
+      totalEl.textContent = money(grand);
+      totalEl.className = "v " + (Math.abs(grand) <= TOL ? "ok" : "bad");
+      document.getElementById("gsumGrand").textContent = money(grand);
+      document.getElementById("gsumGrand").className = "money " + (Math.abs(grand) <= TOL ? "ok" : "bad");
+      document.getElementById("gsumMeta").textContent =
+        `${rows.length} group(s) · Grand Total ${money(grand)} · download is a 2-column Excel (Group, Total Out of Balance Amount)`;
+      document.getElementById("gsumBody").innerHTML = rows.map((r) => `
+        <tr>
+          <td><strong>${escapeHtml(r.group)}</strong></td>
+          <td class="money ${r.balanced ? "ok" : "bad"}">${money(r.total)}</td>
+        </tr>
+      `).join("");
+    }
+
+    function downloadGroupBalanceSummary() {
+      const rows = groupSummaryRows();
+      if (!rows.length) return;
+      const grand = rows.reduce((s, r) => s + r.total, 0);
+      const aoa = [["Group", "Total Out of Balance Amount"]];
+      rows.forEach((r) => aoa.push([r.group, r.total]));
+      aoa.push(["Grand Total", grand]);
+      const ws = XLSX.utils.aoa_to_sheet(aoa);
+      ws["!cols"] = [{ wch: 14 }, { wch: 28 }];
+      const lastData = rows.length + 1;
+      ws["!autofilter"] = { ref: `A1:B${lastData}` };
+      for (let i = 2; i <= lastData + 1; i++) {
+        const cell = ws[`B${i}`];
+        if (cell) cell.z = '#,##0.00;(#,##0.00);"0.00"';
+      }
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Group Out of Balance");
+      const month = (orgResult && orgResult.reportMonth) ? orgResult.reportMonth : "Unknown Month";
+      XLSX.writeFile(wb, `AJE Group Out of Balance ${month}.xlsx`);
+    }
+
+    document.getElementById("downloadGroupSummaryBtn").addEventListener("click", () => downloadGroupBalanceSummary());
+
+    // Local preview only: ?demo=gsum  (does not change production analysis path)
+    (function demoGroupSummary() {
+      const q = new URLSearchParams(location.search).get("demo");
+      if (q !== "gsum") return;
+      orgResult = {
+        reportMonth: "June 2026",
+        orgs: [
+          { org: "G0001", total: -1257.07, balanced: false },
+          { org: "G0002", total: -206.15, balanced: false },
+          { org: "G0007", total: -249.55, balanced: false },
+          { org: "G0015", total: -15.00, balanced: false },
+          { org: "G0026", total: -541.02, balanced: false },
+          { org: "G0031", total: -39.99, balanced: false },
+          { org: "G0053", total: -25.05, balanced: false },
+          { org: "G0071", total: -88.16, balanced: false },
+          { org: "G0080", total: -10.00, balanced: false },
+          { org: "G0084", total: -238.49, balanced: false },
+          { org: "G0104", total: -27.05, balanced: false },
+          { org: "G0125", total: -15.00, balanced: false },
+          { org: "G0135", total: -15.99, balanced: false },
+          { org: "G0165", total: -23.06, balanced: false },
+          { org: "G0184", total: -25.68, balanced: false },
+          { org: "G0192", total: -15.00, balanced: false },
+          { org: "G0193", total: -122.68, balanced: false },
+          { org: "G0197", total: -44.98, balanced: false },
+          { org: "G0213", total: -25.49, balanced: false },
+          { org: "G0215", total: -39.99, balanced: false },
+          { org: "G0217", total: -44.98, balanced: false },
+          { org: "G0219", total: -91.41, balanced: false },
+          { org: "G0229", total: -65.95, balanced: false },
+          { org: "G0237", total: 0.00, balanced: true },
+          { org: "G0238", total: -332.12, balanced: false },
+          { org: "G0241", total: -15.00, balanced: false },
+          { org: "G0255", total: -50.10, balanced: false },
+          { org: "G0256", total: -678.17, balanced: false },
+          { org: "G0258", total: -41.04, balanced: false },
+          { org: "G0259", total: -208.71, balanced: false },
+          { org: "G0263", total: -15.75, balanced: false },
+          { org: "G0264", total: -324.56, balanced: false },
+          { org: "G0266", total: -222.31, balanced: false },
+          { org: "G0271", total: -158.70, balanced: false },
+          { org: "G0271P", total: -37.94, balanced: false },
+          { org: "G0275", total: -358.61, balanced: false },
+          { org: "G0280", total: -172.25, balanced: false },
+          { org: "G0281", total: -444.65, balanced: false }
+        ]
+      };
+      renderGroupSummary();
+      const card = document.getElementById("groupSummaryCard");
+      if (card) card.scrollIntoView({ behavior: "instant", block: "start" });
+    })();
 
     // ============ Info modal wiring ============
     (function () {

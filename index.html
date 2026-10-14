@@ -538,6 +538,7 @@
           <button class="nav-child" data-page="all-members" type="button">All Members</button>
           <button class="nav-child" data-page="drdr" type="button">DRDR</button>
           <button class="nav-child" data-page="revenue-by-payment-type" type="button">Revenue By Payment Type</button>
+          <button class="nav-child" data-page="mtd-production" type="button">MTD Production</button>
         </div>
 
         <div class="nav-section">Dashboards</div>
@@ -614,11 +615,13 @@
           { id: "all-members", title: "All Members", desc: "Active/Inactive split + same-person duplicate check (Agreement + Name + DOB). Family Primary/Secondary excluded." },
           { id: "drdr", title: "DRDR", desc: "Summary + club-wise DRDR field vs total validation with filters." },
           { id: "revenue-by-payment-type", title: "Revenue By Payment Type", desc: "Flags receipts with UNAPPLIED + Applied lines together, with amount-match & agreement leading-zero checks." },
+          { id: "mtd-production", title: "MTD Production", desc: "Club-tab missing-date check for Joins / Cancels / Transfers In across the MTD window." },
         ],
       },
       "aje-standard": { embed: "aje-standard.html?v=4" },
       "all-members": { embed: "all-members.html?v=4" },
       "revenue-by-payment-type": { embed: "revenue-by-payment-type.html?v=4" },
+      "mtd-production": { embed: "mtd-production.html?v=1" },
       dashboards: {
         kicker: "DASHBOARDS",
         title: "Dashboards",
@@ -646,7 +649,7 @@
       },
       "eft-allocation": { embed: "eft-allocation.html?v=20260915b" },
       "eft-annual": { embed: "eft-allocation-annual.html?v=20260915b" },
-      "accounting-journal": { embed: "accounting-journal.html?v=4" },
+      "accounting-journal": { embed: "accounting-journal.html?v=5" },
       "pf-reports": {
         kicker: "PF CUSTOM REPORTS",
         title: "PF Custom Reports",
@@ -682,7 +685,7 @@
       if (["past-due-member", "pf-reports"].includes(page)) {
         document.querySelector('[data-toggle="pf"]').classList.add("active");
       }
-      if (["aje-standard", "all-members", "drdr", "revenue-by-payment-type", "insight-reports"].includes(page)) {
+      if (["aje-standard", "all-members", "drdr", "revenue-by-payment-type", "mtd-production", "insight-reports"].includes(page)) {
         document.querySelector('[data-toggle="insight"]').classList.add("active");
       }
     }

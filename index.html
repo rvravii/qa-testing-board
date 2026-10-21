@@ -582,7 +582,7 @@
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M4 10v4h2l5 4V6L6 10H4zm13.5 2a3.5 3.5 0 0 0-1.5-2.9M19 7a7 7 0 0 1 0 10" stroke="#93c5fd" stroke-width="1.7" stroke-linecap="round"/></svg>
             WHAT'S NEW
           </div>
-          <p>Expand sections as new QA logic is added.</p>
+          <p>MTD Production now checks Summary totals against the legend, and still checks missing dates.</p>
         </div>
       </aside>
 
@@ -615,13 +615,13 @@
           { id: "all-members", title: "All Members", desc: "Active/Inactive split + same-person duplicate check (Agreement + Name + DOB). Family Primary/Secondary excluded." },
           { id: "drdr", title: "DRDR", desc: "Summary + club-wise DRDR field vs total validation with filters." },
           { id: "revenue-by-payment-type", title: "Revenue By Payment Type", desc: "Flags receipts with UNAPPLIED + Applied lines together, with amount-match & agreement leading-zero checks." },
-          { id: "mtd-production", title: "MTD Production", desc: "Club-tab missing-date check for Joins / Cancels / Transfers In across the MTD window." },
+          { id: "mtd-production", title: "MTD Production", desc: "Summary cross-totals (members, paymode, membership, invoices, joins) plus the club-tab missing-date check." },
         ],
       },
       "aje-standard": { embed: "aje-standard.html?v=4" },
       "all-members": { embed: "all-members.html?v=4" },
       "revenue-by-payment-type": { embed: "revenue-by-payment-type.html?v=4" },
-      "mtd-production": { embed: "mtd-production.html?v=1" },
+      "mtd-production": { embed: "mtd-production.html?v=2" },
       dashboards: {
         kicker: "DASHBOARDS",
         title: "Dashboards",

@@ -73,6 +73,8 @@
     .progress { height: 6px; background: #0b1324; border-radius: 999px; overflow: hidden; margin-top: 10px; }
     .progress > div { height: 100%; background: var(--accent); width: 0%; transition: width 0.15s; }
     .hidden { display: none; }
+    .sub { display: block; color: var(--muted); font-size: 0.75rem; font-weight: 500; margin-top: 3px; line-height: 1.35; }
+    h2.section { margin: 18px 0 8px; font-size: 1.05rem; }
     .banner {
       border-radius: 12px; padding: 12px 14px; margin-bottom: 12px; border: 1px solid var(--line);
       background: #0b1324; font-size: 0.9rem; line-height: 1.45;
@@ -117,13 +119,14 @@
 
     <div class="card">
       <div class="note">
-        Upload the <strong>MTD Production</strong> workbook. v1 check: on every club tab, date-wise sections
-        (<strong>IN CLUB JOINS</strong>, <strong>VOLUNTARY CANCELS</strong>, <strong>Transfers In</strong>
-        must include every calendar day in the MTD window (no missing dates).
+        Upload the <strong>MTD Production</strong> workbook. The page checks the <strong>Summary</strong> sheet
+        against the Summary Legend (member totals, membership mix, paymode, gender, annual fees, invoices, and joins),
+        then checks every club tab for a missing day in <strong>IN CLUB JOINS</strong>, <strong>VOLUNTARY CANCELS</strong>,
+        and <strong>Transfers In</strong>. Paymode has no total row — the check adds ACH, Reversal, Problem, Credit Card, and Non Billing.
       </div>
       <div class="upload-row">
         <input type="file" id="fileInput" accept=".xlsx,.xls,.xlsm" />
-        <button class="btn" id="runBtn" type="button" disabled>Run missing-date check</button>
+        <button class="btn" id="runBtn" type="button" disabled>Run quality checks</button>
         <button class="btn ghost" id="exportBtn" type="button" disabled>Export findings CSV</button>
       </div>
       <div class="progress hidden" id="progressWrap"><div id="progressBar"></div></div>
@@ -134,26 +137,88 @@
       <div class="note" style="margin-bottom:4px"><strong>Legend impact (from workbook)</strong></div>
       <div class="legend-grid">
         <div class="legend-box">
-          <h3>Daily Summary</h3>
-          <div class="note">What occurred <em>yesterday</em> — club rollup (Gross Invoices, Joins by membership type).</div>
+          <h3>Summary population</h3>
+          <div class="note">Active + Frozen + Pending Cancel + PIF = Grand Total. Top membership and paymode equal that same Grand Total. Billing membership equals Active Members.</div>
         </div>
         <div class="legend-box">
-          <h3>Summary</h3>
-          <div class="note">What has occurred <em>month to date</em> — same metrics, MTD view.</div>
+          <h3>Summary dollars and joins</h3>
+          <div class="note">Status dollars equal the Grand Total. Annual-fee months equal the annual total. Club gross invoices equal the Summary invoice total. Join types equal each channel total.</div>
         </div>
         <div class="legend-box">
-          <h3>Club tabs (1, 6, 44…)</h3>
-          <div class="note">Date-wise detail for Joins / Cancels / Transfers / Check-Ins. <strong>Missing dates here understate MTD production.</strong></div>
+          <h3>Client logic on the same sheet</h3>
+          <div class="note">Classic Plus stays its own bucket. No duplicate club. A club with invoices still has joins. ACH% + CC% equals 100% when the club has members or invoices.</div>
         </div>
         <div class="legend-box">
-          <h3>Why this check matters</h3>
-          <div class="note">A gap in club date rows means joins/cancels for that day never feed Daily Summary / Summary totals.</div>
+          <h3>Club tabs</h3>
+          <div class="note">IN CLUB JOINS, VOLUNTARY CANCELS, and Transfers In include every day from the first date in the file through the last. A missing day never reaches the Summary.</div>
         </div>
       </div>
     </div>
 
     <div class="card hidden" id="resultsCard">
       <div id="statusBanner" class="banner"></div>
+
+      <h2 class="section">Summary logic checks</h2>
+      <div class="kpis" id="logicKpis">
+        <div class="kpi">
+          <div class="l">Logic checks</div>
+          <div class="v" id="kpiLogic">—</div>
+          <div class="hint">Summary Legend + client rules</div>
+        </div>
+        <div class="kpi">
+          <div class="l">Passed</div>
+          <div class="v ok" id="kpiLogicPass">—</div>
+          <div class="hint">Totals agree</div>
+        </div>
+        <div class="kpi">
+          <div class="l">Failed</div>
+          <div class="v bad" id="kpiLogicFail">—</div>
+          <div class="hint">Needs a look</div>
+        </div>
+        <div class="kpi">
+          <div class="l">Club exceptions</div>
+          <div class="v" id="kpiClubExc">—</div>
+          <div class="hint">Rows that break a club rule</div>
+        </div>
+        <div class="kpi">
+          <div class="l">Summary clubs</div>
+          <div class="v" id="kpiSummaryClubs">—</div>
+          <div class="hint">Clubs on the Summary list</div>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Check</th>
+              <th>Rule</th>
+              <th>Expected</th>
+              <th>Actual</th>
+              <th>Difference</th>
+              <th>Result</th>
+              <th>Source</th>
+            </tr>
+          </thead>
+          <tbody id="logicBody"></tbody>
+        </table>
+      </div>
+
+      <h2 class="section">Club logic exceptions</h2>
+      <div class="meta" id="clubMeta"></div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Club</th>
+              <th>Check</th>
+              <th>Detail</th>
+            </tr>
+          </thead>
+          <tbody id="clubBody"></tbody>
+        </table>
+      </div>
+
+      <h2 class="section">Date coverage on club tabs</h2>
       <div class="kpis">
         <div class="kpi">
           <div class="l">Club tabs</div>
@@ -210,19 +275,27 @@
       </div>
       <div class="info-modal-body">
         <h4>What this report does</h4>
-        <p>Validates the <strong>MTD Production</strong> export for date continuity on every club tab.</p>
-        <h4>v1 check (now)</h4>
+        <p>Validates the <strong>MTD Production</strong> export in two layers. The Summary sheet is the month-to-date view. Club tabs hold one row per day.</p>
+        <h4>Summary logic</h4>
         <ul>
-          <li>Read all club sheets (numeric tab names).</li>
-          <li>For sections <code>IN CLUB JOINS</code>, <code>VOLUNTARY CANCELS</code>, <code>Transfers In</code> — collect Date rows.</li>
-          <li>Build expected calendar from global min→max date in the file.</li>
-          <li>Highlight any club/section where a day is missing.</li>
+          <li>Active + Frozen + Pending Cancel + PIF Count = Grand Total, in count and in dollars.</li>
+          <li>Paid in full dues are $0.</li>
+          <li>Top membership counts, and the five paymode counts, each equal Grand Total. Paymode has no total row.</li>
+          <li>Billing membership counts equal Active Members.</li>
+          <li>Percents in each block equal 100%.</li>
+          <li>Gender counts equal Grand Total.</li>
+          <li>The twelve annual-fee months equal the annual Grand Total.</li>
+          <li>Daily Summary carries the same member Grand Total as Summary.</li>
+          <li>Club gross-invoice dollars equal the Summary Gross Invoices total.</li>
+          <li>In Club, Web, and Mobile type columns equal that channel’s Total, and the three channels equal the combined Total.</li>
+          <li>Classic Plus (CLASPL) is its own bucket. No duplicate club. A club with invoices still has joins. ACH% + CC% equals 100% when the club has members or invoices.</li>
         </ul>
-        <h4>Later enhancements</h4>
+        <h4>Date coverage</h4>
         <ul>
-          <li>Check-Ins / Web Joins / other sections</li>
-          <li>Legend-driven metric impact flags</li>
-          <li>Daily Summary vs club-tab rollup parity</li>
+          <li>Read every club sheet.</li>
+          <li>For IN CLUB JOINS, VOLUNTARY CANCELS, and Transfers In, collect the Date rows.</li>
+          <li>Build the calendar from the earliest date in the file through the latest.</li>
+          <li>Highlight a club when a day is missing, or when the section has no date rows at all.</li>
         </ul>
       </div>
     </div>
@@ -299,11 +372,544 @@
       return sections;
     }
 
+    function num(v) {
+      if (typeof v === "number" && Number.isFinite(v)) return v;
+      if (typeof v === "string") {
+        const t = v.replace(/[$,]/g, "").trim();
+        if (!t || t === "-") return null;
+        const n = Number(t);
+        return Number.isFinite(n) ? n : null;
+      }
+      return null;
+    }
+
+    function sheetRows(wb, name) {
+      if (!wb.SheetNames.includes(name)) return null;
+      return XLSX.utils.sheet_to_json(wb.Sheets[name], { header: 1, defval: "", raw: true });
+    }
+
+    function findSection(rows, title) {
+      const want = title.toLowerCase();
+      for (let r = 0; r < Math.min(rows.length, 4); r++) {
+        const starts = [];
+        (rows[r] || []).forEach((c, i) => {
+          const t = String(c || "").trim().toLowerCase();
+          if (t) starts.push({ i, t });
+        });
+        const hit = starts.find((s) => s.t === want);
+        if (!hit) continue;
+        const next = starts.find((s) => s.i > hit.i);
+        return { start: hit.i, end: next ? next.i : ((rows[r] || []).length || hit.i + 25) };
+      }
+      return null;
+    }
+
+    function labeled(rows, section) {
+      const items = [];
+      for (let r = 1; r < Math.min(rows.length, 18); r++) {
+        const row = rows[r] || [];
+        for (let c = section.start; c < section.end && c < row.length; c++) {
+          const lab = String(row[c] || "").trim();
+          if (!lab || !/[a-z]/i.test(lab)) continue;
+          const key = lab.toLowerCase();
+          if (key === "count" || key === "%" || key === "$") continue;
+          const nums = [];
+          for (let k = c + 1; k < section.end && k < row.length; k++) {
+            const cell = row[k];
+            if (typeof cell === "string" && cell.trim() && num(cell) === null) break;
+            const n = num(cell);
+            if (n !== null) nums.push(n);
+          }
+          if (nums.length) items.push({ label: lab, nums });
+        }
+      }
+      return items;
+    }
+
+    function blockMap(rows, title) {
+      const section = findSection(rows, title);
+      if (!section) return null;
+      const items = labeled(rows, section);
+      const by = {};
+      items.forEach((it) => { by[it.label.toLowerCase()] = it; });
+      return { items, by };
+    }
+
+    function sumCount(items) {
+      return items.reduce((a, it) => a + (it.nums[0] || 0), 0);
+    }
+
+    function sumPct(items) {
+      const s = items.reduce((a, it) => a + (it.nums[1] || 0), 0);
+      return s > 2 ? s / 100 : s;
+    }
+
+    function breakdown(items) {
+      return items.map((it) => `${it.label} ${Math.round(it.nums[0]).toLocaleString("en-US")}`).join(" + ");
+    }
+
+    function pushNum(checks, o) {
+      const tol = o.kind === "money" ? 0.05 : o.kind === "pct" ? 0.001 : 0;
+      const ok = o.actual !== null && o.expected !== null && Math.abs(o.actual - o.expected) <= tol;
+      checks.push({
+        name: o.name,
+        rule: o.rule,
+        source: o.source,
+        kind: o.kind,
+        expected: o.expected,
+        actual: o.actual,
+        diff: o.actual === null || o.expected === null ? null : o.actual - o.expected,
+        note: o.note || "",
+        status: ok ? "Pass" : "Fail",
+      });
+    }
+
+    function pushText(checks, o) {
+      checks.push({
+        name: o.name,
+        rule: o.rule,
+        source: o.source,
+        kind: "text",
+        expected: o.expected,
+        actual: o.actual,
+        diff: o.diff || "",
+        note: o.note || "",
+        status: o.pass ? "Pass" : "Fail",
+      });
+    }
+
+    function headerNorm(v) {
+      return String(v || "").trim().toLowerCase().replace(/\s+/g, " ");
+    }
+
+    function analyzeSummary(rows, dailyRows) {
+      const checks = [];
+      const clubIssues = [];
+      if (!rows) {
+        pushText(checks, {
+          name: "Summary sheet",
+          rule: "The workbook includes a Summary sheet.",
+          source: "Summary Legend",
+          expected: "Summary",
+          actual: "Missing",
+          pass: false,
+        });
+        return { checks, clubIssues, summaryClubs: 0 };
+      }
+
+      const annualMonths = ["january","february","march","april","may","june","july","august","september","october","november","december"];
+      const months = [];
+      let annualGrand = null;
+      let grossCard = null;
+      for (let r = 0; r < Math.min(rows.length, 22); r++) {
+        const row = rows[r] || [];
+        const lab = String(row[0] || "").trim().toLowerCase();
+        const count = num(row[1]);
+        const dollars = num(row[2]);
+        if (annualMonths.includes(lab) && count !== null) months.push({ label: lab, count, dollars: dollars || 0 });
+        if (lab === "grand total" && count !== null) annualGrand = { count, dollars: dollars || 0 };
+        if (lab === "gross invoices" && count !== null) grossCard = { count, dollars: dollars || 0 };
+      }
+
+      const members = blockMap(rows, "all active members");
+      const top = blockMap(rows, "top membership types");
+      const billing = blockMap(rows, "billing membership types");
+      const paymode = blockMap(rows, "paymode breakdown");
+      const gender = blockMap(rows, "gender breakdown");
+
+      const statusLabels = ["active members", "frozen", "pending cancel", "pif count"];
+      const grand = members && members.by["grand total"];
+      const grandCount = grand ? grand.nums[0] : null;
+      const grandDollars = grand ? (grand.nums[1] ?? null) : null;
+      const active = members && members.by["active members"];
+      const activeCount = active ? active.nums[0] : null;
+      const pif = members && members.by["pif count"];
+
+      if (members && grandCount !== null) {
+        const parts = statusLabels.map((k) => members.by[k]).filter(Boolean);
+        pushNum(checks, {
+          name: "Member status counts",
+          rule: "Active + Frozen + Pending Cancel + PIF Count = Grand Total.",
+          source: "Summary Legend — All Active Members",
+          kind: "count",
+          expected: grandCount,
+          actual: sumCount(parts),
+          note: breakdown(parts),
+        });
+        pushNum(checks, {
+          name: "Member status dollars",
+          rule: "Dues for those four statuses = Grand Total dollars.",
+          source: "Summary Legend — All Active Members",
+          kind: "money",
+          expected: grandDollars,
+          actual: parts.reduce((a, it) => a + (it.nums[1] || 0), 0),
+          note: parts.map((it) => `${it.label} ${(it.nums[1] || 0).toLocaleString("en-US", { style: "currency", currency: "USD" })}`).join(" + "),
+        });
+      } else {
+        pushText(checks, {
+          name: "Member status counts",
+          rule: "Active + Frozen + Pending Cancel + PIF Count = Grand Total.",
+          source: "Summary Legend — All Active Members",
+          expected: "Grand Total",
+          actual: "Block not found",
+          pass: false,
+        });
+      }
+
+      pushNum(checks, {
+        name: "Paid in full dues",
+        rule: "PIF Count is paid-in-full cash, so dues on that row are $0.",
+        source: "Summary Legend — PIF Count",
+        kind: "money",
+        expected: 0,
+        actual: pif ? (pif.nums[1] ?? null) : null,
+        note: pif ? `PIF count ${Math.round(pif.nums[0]).toLocaleString("en-US")}` : "PIF Count row not found",
+      });
+
+      if (!top) pushText(checks, { name: "Top membership counts", rule: "Top Membership Types block is on the Summary sheet.", source: "Summary Legend — Top Membership Types", expected: "Present", actual: "Not found", pass: false });
+      if (top && grandCount !== null) {
+        pushNum(checks, {
+          name: "Top membership counts",
+          rule: "Every top-membership row adds up to the member Grand Total.",
+          source: "Summary Legend — Top Membership Types",
+          kind: "count",
+          expected: grandCount,
+          actual: sumCount(top.items),
+          note: breakdown(top.items),
+        });
+        pushNum(checks, {
+          name: "Top membership percent",
+          rule: "Top membership percents equal 100%.",
+          source: "Summary Legend — Top Membership Types",
+          kind: "pct",
+          expected: 1,
+          actual: sumPct(top.items),
+        });
+        const claspl = top.by.claspl;
+        pushText(checks, {
+          name: "Classic Plus bucket",
+          rule: "CLASPL is its own membership row, not folded into OTHER.",
+          source: "IGS-18096",
+          expected: "CLASPL row present",
+          actual: claspl ? `CLASPL ${Math.round(claspl.nums[0]).toLocaleString("en-US")}` : "CLASPL row missing",
+          pass: !!claspl,
+        });
+      }
+
+      if (!billing) pushText(checks, { name: "Billing membership counts", rule: "Billing Membership Types block is on the Summary sheet.", source: "Summary Legend — Billing Membership Types", expected: "Present", actual: "Not found", pass: false });
+      if (billing && activeCount !== null) {
+        pushNum(checks, {
+          name: "Billing membership counts",
+          rule: "Billing types describe members with scheduled invoices, so they equal Active Members.",
+          source: "Summary Legend — Billing Membership Types",
+          kind: "count",
+          expected: activeCount,
+          actual: sumCount(billing.items),
+          note: breakdown(billing.items),
+        });
+        pushNum(checks, {
+          name: "Billing membership percent",
+          rule: "Billing membership percents equal 100%.",
+          source: "Summary Legend — Billing Membership Types",
+          kind: "pct",
+          expected: 1,
+          actual: sumPct(billing.items),
+        });
+      }
+
+      if (!paymode) pushText(checks, { name: "Paymode counts", rule: "Paymode Breakdown block is on the Summary sheet.", source: "Summary Legend — Paymode Breakdown", expected: "Present", actual: "Not found", pass: false });
+      if (paymode && grandCount !== null) {
+        pushNum(checks, {
+          name: "Paymode counts",
+          rule: "ACH + Reversal + Problem + Credit Card + Non Billing = Grand Total. Paymode has no total row.",
+          source: "Summary Legend — Paymode Breakdown",
+          kind: "count",
+          expected: grandCount,
+          actual: sumCount(paymode.items),
+          note: breakdown(paymode.items),
+        });
+        pushNum(checks, {
+          name: "Paymode percent",
+          rule: "Paymode percents equal 100%.",
+          source: "Summary Legend — Paymode Breakdown",
+          kind: "pct",
+          expected: 1,
+          actual: sumPct(paymode.items),
+        });
+      }
+
+      if (!gender) pushText(checks, { name: "Gender counts", rule: "Gender Breakdown block is on the Summary sheet.", source: "Summary Legend — Gender Breakdown", expected: "Present", actual: "Not found", pass: false });
+      if (gender && grandCount !== null) {
+        pushNum(checks, {
+          name: "Gender counts",
+          rule: "Female + Male + Unspecified = Grand Total.",
+          source: "Summary Legend — Gender Breakdown",
+          kind: "count",
+          expected: grandCount,
+          actual: sumCount(gender.items),
+          note: breakdown(gender.items),
+        });
+        pushNum(checks, {
+          name: "Gender percent",
+          rule: "Gender percents equal 100%.",
+          source: "Summary Legend — Gender Breakdown",
+          kind: "pct",
+          expected: 1,
+          actual: sumPct(gender.items),
+        });
+      }
+
+      if (annualGrand && months.length) {
+        const countSum = months.reduce((a, m) => a + m.count, 0);
+        const dollarSum = months.reduce((a, m) => a + m.dollars, 0);
+        const countOk = countSum === annualGrand.count;
+        const dollarOk = Math.abs(dollarSum - annualGrand.dollars) <= 0.05;
+        pushText(checks, {
+          name: "Annual fee months",
+          rule: "January through December equal the annual Grand Total, in count and in dollars.",
+          source: "Summary Legend — Annual Fee Summary",
+          expected: `${Math.round(annualGrand.count).toLocaleString("en-US")} · ${annualGrand.dollars.toLocaleString("en-US", { style: "currency", currency: "USD" })}`,
+          actual: `${Math.round(countSum).toLocaleString("en-US")} · ${dollarSum.toLocaleString("en-US", { style: "currency", currency: "USD" })}`,
+          diff: countOk && dollarOk ? "0" : "See actual",
+          note: `${months.length} month rows`,
+          pass: countOk && dollarOk && months.length === 12,
+        });
+      }
+
+      const negatives = [];
+      [members, top, billing, paymode, gender].forEach((block) => {
+        if (!block) return;
+        block.items.forEach((it) => {
+          it.nums.forEach((n, i) => {
+            if (n < -0.009) negatives.push(`${it.label} ${i === 0 ? "count" : "value"} ${n}`);
+          });
+        });
+      });
+      months.forEach((m) => {
+        if (m.count < 0) negatives.push(`${m.label} count ${m.count}`);
+        if (m.dollars < -0.009) negatives.push(`${m.label} dollars ${m.dollars}`);
+      });
+      pushText(checks, {
+        name: "No negative Summary cards",
+        rule: "Member, membership, paymode, gender, and annual-fee cards are not negative.",
+        source: "IGS-19306 · DNADW-3456",
+        expected: "0 negative values",
+        actual: negatives.length ? `${negatives.length} negative` : "0 negative values",
+        note: negatives.slice(0, 6).join("; "),
+        pass: negatives.length === 0,
+      });
+
+      if (dailyRows && grandCount !== null) {
+        const dailyMembers = blockMap(dailyRows, "all active members");
+        const dailyGrand = dailyMembers && dailyMembers.by["grand total"];
+        const sameCount = dailyGrand && dailyGrand.nums[0] === grandCount;
+        const sameDollars = dailyGrand && grandDollars !== null && Math.abs((dailyGrand.nums[1] || 0) - grandDollars) <= 0.05;
+        pushText(checks, {
+          name: "Daily Summary matches Summary",
+          rule: "Both sheets carry the same member Grand Total, in count and in dollars.",
+          source: "Summary Legend — Daily Summary and Summary",
+          expected: grandDollars === null ? String(grandCount) : `${Math.round(grandCount).toLocaleString("en-US")} · ${grandDollars.toLocaleString("en-US", { style: "currency", currency: "USD" })}`,
+          actual: dailyGrand ? `${Math.round(dailyGrand.nums[0]).toLocaleString("en-US")} · ${(dailyGrand.nums[1] || 0).toLocaleString("en-US", { style: "currency", currency: "USD" })}` : "Grand Total not found",
+          pass: !!(sameCount && sameDollars),
+        });
+      }
+
+      const titleAt = rows.findIndex((row) => (row || []).some((c) => headerNorm(c) === "in club joins"));
+      let summaryClubs = 0;
+      if (titleAt >= 0 && rows[titleAt + 1]) {
+        const titleRow = rows[titleAt];
+        const headerRow = rows[titleAt + 1];
+        const titles = [];
+        titleRow.forEach((c, i) => {
+          const t = headerNorm(c);
+          if (t) titles.push({ t, i });
+        });
+        const groups = ["in club joins", "web joins", "mobile joins"].map((name) => {
+          const hit = titles.find((x) => x.t === name);
+          if (!hit) return null;
+          const next = titles.find((x) => x.i > hit.i);
+          const end = next ? next.i : headerRow.length;
+          const totals = [];
+          const types = [];
+          for (let c = hit.i; c < end; c++) {
+            const h = headerNorm(headerRow[c]);
+            if (!h) continue;
+            if (h === "total") totals.push(c);
+            else types.push(c);
+          }
+          return { name, types, total: totals[0] ?? null, extraTotal: totals[1] ?? null };
+        }).filter(Boolean);
+
+        const payHit = titles.find((x) => x.t === "paymode");
+        let achCol = null;
+        let ccCol = null;
+        if (payHit) {
+          const next = titles.find((x) => x.i > payHit.i);
+          const end = next ? next.i : headerRow.length;
+          for (let c = payHit.i; c < end; c++) {
+            const h = headerNorm(headerRow[c]);
+            if (h === "ach %") achCol = c;
+            if (h === "cc %") ccCol = c;
+          }
+        }
+        const grossCol = headerRow.findIndex((c) => headerNorm(c) === "gross invoices");
+        const memberCol = headerRow.findIndex((c) => headerNorm(c) === "members");
+        const seen = new Map();
+        let grossSum = 0;
+        let negGross = 0;
+        let dupes = 0;
+        let joinOff = 0;
+        let channelOff = 0;
+        let zeroJoins = 0;
+        let payOff = 0;
+        let payChecked = 0;
+        let paySkipped = 0;
+
+        for (let r = titleAt + 2; r < rows.length; r++) {
+          const row = rows[r] || [];
+          const name = String(row[0] || "").trim();
+          if (!name) continue;
+          if (!/^\d/.test(name)) continue;
+          summaryClubs += 1;
+          const id = name.split("-")[0].trim();
+          if (seen.has(id)) {
+            dupes += 1;
+            clubIssues.push({ club: name, check: "Duplicate club", detail: `Same club id as ${seen.get(id)}` });
+          } else seen.set(id, name);
+
+          const gross = grossCol >= 0 ? num(row[grossCol]) || 0 : 0;
+          grossSum += gross;
+          if (gross < -0.009) {
+            negGross += 1;
+            clubIssues.push({ club: name, check: "Negative gross invoice", detail: gross.toLocaleString("en-US", { style: "currency", currency: "USD" }) });
+          }
+
+          const channelTotals = [];
+          groups.forEach((g) => {
+            const parts = g.types.reduce((a, c) => a + (num(row[c]) || 0), 0);
+            const total = g.total === null ? null : (num(row[g.total]) || 0);
+            if (g.types.some((c) => (num(row[c]) || 0) < 0)) {
+              clubIssues.push({ club: name, check: "Negative join count", detail: g.name });
+            }
+            if (total !== null && Math.abs(parts - total) > 0.01) {
+              joinOff += 1;
+              clubIssues.push({ club: name, check: "Join types vs channel total", detail: `${g.name}: types ${parts} vs total ${total}` });
+            }
+            if (total !== null) channelTotals.push(total);
+          });
+          const extra = groups.find((g) => g.extraTotal !== null);
+          if (extra && channelTotals.length === groups.length) {
+            const combined = channelTotals.reduce((a, n) => a + n, 0);
+            const posted = num(row[extra.extraTotal]) || 0;
+            if (Math.abs(combined - posted) > 0.01) {
+              channelOff += 1;
+              clubIssues.push({ club: name, check: "Channel totals vs combined joins", detail: `In Club + Web + Mobile ${combined} vs combined total ${posted}` });
+            }
+          }
+          const joinSum = channelTotals.reduce((a, n) => a + n, 0);
+          if (gross > 0.009 && joinSum === 0) {
+            zeroJoins += 1;
+            clubIssues.push({ club: name, check: "Invoices with no joins", detail: `Gross invoices ${gross.toLocaleString("en-US", { style: "currency", currency: "USD" })} and all three join channels are 0` });
+          }
+
+          if (achCol !== null && ccCol !== null) {
+            const ach = num(row[achCol]);
+            const cc = num(row[ccCol]);
+            const membersN = memberCol >= 0 ? (num(row[memberCol]) || 0) : 0;
+            const emptyClub = gross === 0 && membersN === 0 && (ach || 0) === 0 && (cc || 0) === 0;
+            if (emptyClub) paySkipped += 1;
+            else {
+              payChecked += 1;
+              const sum = (ach || 0) + (cc || 0);
+              if (Math.abs(sum - 1) > 0.02) {
+                payOff += 1;
+                clubIssues.push({ club: name, check: "Paymode percent", detail: `ACH% + CC% = ${(sum * 100).toFixed(2)}%` });
+              }
+            }
+          }
+        }
+
+        pushNum(checks, {
+          name: "Club gross invoices",
+          rule: "The Gross Invoices dollar column on every Summary club row equals the Summary Gross Invoices total.",
+          source: "IGS-19461 · IGS-19619 · DNADW-3453",
+          kind: "money",
+          expected: grossCard ? grossCard.dollars : null,
+          actual: grossSum,
+          note: grossCard ? `${summaryClubs.toLocaleString("en-US")} clubs · invoice count on the card ${Math.round(grossCard.count).toLocaleString("en-US")} (the club grid has dollars only)` : `${summaryClubs.toLocaleString("en-US")} clubs`,
+        });
+        pushText(checks, {
+          name: "No negative club invoice",
+          rule: "No Summary club has a negative gross invoice.",
+          source: "IGS-19461 · IGS-19619 · DNADW-3453",
+          expected: "0 clubs",
+          actual: `${negGross.toLocaleString("en-US")} clubs`,
+          pass: negGross === 0,
+        });
+        pushText(checks, {
+          name: "No duplicate club",
+          rule: "Each club id appears once on the Summary list.",
+          source: "IGS-19306 · DNADW-3457",
+          expected: "0 duplicates",
+          actual: `${dupes.toLocaleString("en-US")} duplicates`,
+          pass: dupes === 0,
+        });
+        pushText(checks, {
+          name: "Join types equal channel totals",
+          rule: "BCM, CLASPL, 10NR, 12NR, 15NR, 99NR, NC, DIGX, BCDIGX, CLDIGX, and Other equal the channel Total, for In Club, Web, and Mobile.",
+          source: "Summary Legend — joins",
+          expected: "0 clubs off",
+          actual: `${joinOff.toLocaleString("en-US")} clubs off`,
+          pass: joinOff === 0,
+        });
+        pushText(checks, {
+          name: "Three channels equal combined joins",
+          rule: "In Club + Web + Mobile equals the combined join Total.",
+          source: "Summary Legend — joins",
+          expected: "0 clubs off",
+          actual: `${channelOff.toLocaleString("en-US")} clubs off`,
+          pass: channelOff === 0,
+        });
+        pushText(checks, {
+          name: "Invoices still have joins",
+          rule: "A club with gross invoices has joins in at least one of In Club, Web, or Mobile.",
+          source: "IGS-19809",
+          expected: "0 clubs",
+          actual: `${zeroJoins.toLocaleString("en-US")} clubs`,
+          note: "Catches a merged club that keeps invoices and loses the join rows.",
+          pass: zeroJoins === 0,
+        });
+        pushText(checks, {
+          name: "Club paymode percents",
+          rule: "ACH% + CC% equals 100% when the club has members or invoices. An empty club is skipped.",
+          source: "Summary Legend — PAYMODE",
+          expected: "0 clubs off",
+          actual: `${payOff.toLocaleString("en-US")} clubs off`,
+          note: `${payChecked.toLocaleString("en-US")} clubs checked · ${paySkipped.toLocaleString("en-US")} empty clubs skipped`,
+          pass: payOff === 0,
+        });
+      } else {
+        pushText(checks, {
+          name: "Summary club grid",
+          rule: "The Summary sheet has the In Club Joins club grid.",
+          source: "Summary Legend",
+          expected: "IN CLUB JOINS",
+          actual: "Grid not found",
+          pass: false,
+        });
+      }
+
+      return { checks, clubIssues, summaryClubs };
+    }
+
     function analyzeWorkbook(wb) {
+      const summaryRows = sheetRows(wb, "Summary");
+      const dailyRows = sheetRows(wb, "Daily Summary");
+      const logic = analyzeSummary(summaryRows, dailyRows);
+
       const clubNames = {};
-      if (wb.SheetNames.includes("Daily Summary")) {
-        const ds = XLSX.utils.sheet_to_json(wb.Sheets["Daily Summary"], { header: 1, defval: "", raw: false });
-        for (const row of ds) {
+      if (dailyRows) {
+        for (const row of dailyRows) {
           const c = String(row[0] || "").trim();
           const m = c.match(/^(\d+)\s*-/);
           if (m) clubNames[m[1]] = c;
@@ -324,12 +930,26 @@
         clubSections.push({ sheet: name, sections });
       }
 
-      if (!allDates.size) throw new Error("No date rows found on club tabs");
+      if (!allDates.size) {
+        return {
+          fileName,
+          clubTabs: clubSheets.length,
+          periodStart: "—",
+          periodEnd: "—",
+          expectedDays: 0,
+          clubsOk: 0,
+          clubsBad: 0,
+          findings: [],
+          dateNote: "No date rows found on club tabs.",
+          checks: logic.checks,
+          clubIssues: logic.clubIssues,
+          summaryClubs: logic.summaryClubs,
+        };
+      }
       const sorted = [...allDates].sort();
       const start = new Date(sorted[0] + "T00:00:00Z");
       const end = new Date(sorted[sorted.length - 1] + "T00:00:00Z");
       const expected = eachDay(start, end).map(iso);
-      const expectedSet = new Set(expected);
 
       const findings = [];
       let ok = 0;
@@ -363,12 +983,42 @@
         clubsOk: ok,
         clubsBad: new Set(findings.map((f) => f.clubId)).size,
         findings,
+        dateNote: "",
+        checks: logic.checks,
+        clubIssues: logic.clubIssues,
+        summaryClubs: logic.summaryClubs,
       };
+    }
+
+    function formatVal(kind, v) {
+      if (kind === "text") return v === null || v === undefined || v === "" ? "—" : String(v);
+      if (v === null || v === undefined || Number.isNaN(v)) return "—";
+      if (kind === "money") return v.toLocaleString("en-US", { style: "currency", currency: "USD" });
+      if (kind === "pct") return (v * 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 4 }) + "%";
+      return Math.round(v).toLocaleString("en-US");
+    }
+
+    function formatDiff(kind, v) {
+      if (kind === "text") return v ? String(v) : "—";
+      if (v === null || v === undefined || Number.isNaN(v)) return "—";
+      if (Math.abs(v) < (kind === "money" ? 0.005 : kind === "pct" ? 0.0000001 : 0.0001)) return kind === "pct" ? "0 pts" : "0";
+      const sign = v > 0 ? "+" : "";
+      if (kind === "money") return sign + v.toLocaleString("en-US", { style: "currency", currency: "USD" });
+      if (kind === "pct") return sign + (v * 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 4 }) + " pts";
+      return sign + Math.round(v).toLocaleString("en-US");
     }
 
     function render() {
       if (!result) return;
       document.getElementById("resultsCard").classList.remove("hidden");
+      const checks = result.checks || [];
+      const issues = result.clubIssues || [];
+      const logicFails = checks.filter((c) => c.status === "Fail").length;
+      document.getElementById("kpiLogic").textContent = String(checks.length);
+      document.getElementById("kpiLogicPass").textContent = String(checks.length - logicFails);
+      document.getElementById("kpiLogicFail").textContent = String(logicFails);
+      document.getElementById("kpiClubExc").textContent = String(issues.length);
+      document.getElementById("kpiSummaryClubs").textContent = Number(result.summaryClubs || 0).toLocaleString("en-US");
       document.getElementById("kpiClubs").textContent = String(result.clubTabs);
       document.getElementById("kpiWindow").textContent = `${result.periodStart} → ${result.periodEnd}`;
       document.getElementById("kpiDays").textContent = String(result.expectedDays);
@@ -376,32 +1026,64 @@
       document.getElementById("kpiBad").textContent = String(result.clubsBad);
 
       const banner = document.getElementById("statusBanner");
-      if (result.clubsBad === 0) {
+      const problems = [];
+      if (logicFails) problems.push(`${logicFails} summary logic check${logicFails === 1 ? "" : "s"} failed`);
+      if (issues.length) problems.push(`${issues.length} club exception${issues.length === 1 ? "" : "s"}`);
+      if (result.clubsBad) problems.push(`${result.clubsBad} club tab${result.clubsBad === 1 ? "" : "s"} missing dates`);
+      if (result.dateNote) problems.push(result.dateNote);
+      if (!problems.length) {
         banner.className = "banner pass";
-        banner.innerHTML = `<strong class="ok">Pass</strong> — all ${result.clubTabs} clubs have full date coverage for Joins / Cancels / Transfers In (${result.expectedDays} days).`;
+        banner.innerHTML = `<strong class="ok">Pass</strong> — ${checks.length} summary logic checks agree, and all ${result.clubTabs} club tabs have full date coverage (${result.expectedDays} days).`;
       } else {
         banner.className = "banner fail";
-        banner.innerHTML = `<strong class="bad">Fail</strong> — <strong>${result.clubsBad}</strong> club(s) have missing date rows. These gaps can understate MTD Production metrics that roll up from club detail.`;
+        banner.innerHTML = `<strong class="bad">Fail</strong> — ${problems.join(" · ")}.`;
       }
 
-      document.getElementById("filterMeta").textContent =
-        `${result.findings.length} section finding(s) · highlighted dates are missing from that club tab`;
+      document.getElementById("logicBody").innerHTML = checks.map((c) => `
+        <tr>
+          <td><strong>${escapeHtml(c.name)}</strong>${c.note ? `<span class="sub">${escapeHtml(c.note)}</span>` : ""}</td>
+          <td>${escapeHtml(c.rule)}</td>
+          <td>${escapeHtml(formatVal(c.kind, c.expected))}</td>
+          <td>${escapeHtml(formatVal(c.kind, c.actual))}</td>
+          <td>${escapeHtml(formatDiff(c.kind, c.kind === "text" ? c.diff : c.diff))}</td>
+          <td><span class="pill ${c.status === "Pass" ? "ok" : "bad"}">${escapeHtml(c.status)}</span></td>
+          <td>${escapeHtml(c.source)}</td>
+        </tr>
+      `).join("") || `<tr><td colspan="7" class="note">No logic checks were produced.</td></tr>`;
+
+      const shown = issues.slice(0, 80);
+      document.getElementById("clubMeta").textContent = issues.length
+        ? `${issues.length} exception${issues.length === 1 ? "" : "s"}${issues.length > shown.length ? ` · showing ${shown.length}` : ""}`
+        : "No club-level exceptions on the Summary list.";
+      document.getElementById("clubBody").innerHTML = shown.length ? shown.map((f) => `
+        <tr>
+          <td><strong>${escapeHtml(f.club)}</strong></td>
+          <td>${escapeHtml(f.check)}</td>
+          <td>${escapeHtml(f.detail)}</td>
+        </tr>
+      `).join("") : `<tr><td colspan="3" class="note">Every Summary club row passed the join, invoice, duplicate, and paymode rules.</td></tr>`;
+
+      document.getElementById("filterMeta").textContent = result.dateNote
+        ? result.dateNote
+        : `${result.findings.length} section finding(s) · a full miss means the section has a Grand Total and no daily rows`;
 
       const body = document.getElementById("findingsBody");
       if (!result.findings.length) {
         body.innerHTML = `<tr><td colspan="6" class="note">No missing dates — all tracked sections complete.</td></tr>`;
         return;
       }
-      body.innerHTML = result.findings.map((f) => `
+      body.innerHTML = result.findings.map((f) => {
+        const allMissing = f.missing.length === f.expected;
+        return `
         <tr>
           <td><strong>${escapeHtml(f.clubName)}</strong><div class="meta">tab ${escapeHtml(f.clubId)}</div></td>
           <td>${escapeHtml(f.section)}</td>
           <td>${f.have}</td>
           <td>${f.expected}</td>
           <td>${f.missing.map((d) => `<span class="miss-chip">${d}</span>`).join("")}</td>
-          <td><span class="pill bad">Missing</span></td>
-        </tr>
-      `).join("");
+          <td><span class="pill bad">${allMissing ? "No date rows" : "Missing days"}</span></td>
+        </tr>`;
+      }).join("");
     }
 
     function escapeHtml(s) {
@@ -422,7 +1104,7 @@
       fileMeta.textContent = `Loading ${f.name} (${(f.size / 1024 / 1024).toFixed(1)} MB)…`;
       try {
         buf = await f.arrayBuffer();
-        fileMeta.textContent = `Ready: ${f.name}. Click Run missing-date check.`;
+        fileMeta.textContent = `Ready: ${f.name}. Click Run quality checks.`;
         runBtn.disabled = false;
       } catch (e) {
         fileMeta.textContent = `Failed: ${e.message || e}`;
@@ -441,9 +1123,9 @@
         result = analyzeWorkbook(wb);
         setProgress(100);
         render();
-        exportBtn.disabled = result.findings.length === 0 && result.clubsBad > 0 ? false : false;
         exportBtn.disabled = false;
-        fileMeta.textContent = `Done: ${fileName} — ${result.clubTabs} clubs · ${result.clubsBad} with missing dates · window ${result.periodStart} → ${result.periodEnd}`;
+        const logicFails = (result.checks || []).filter((c) => c.status === "Fail").length;
+        fileMeta.textContent = `Done: ${fileName} — ${logicFails} logic fail · ${result.clubIssues.length} club exception · ${result.clubsBad} tabs missing dates · ${result.periodStart} → ${result.periodEnd}`;
       } catch (e) {
         console.error(e);
         fileMeta.textContent = `Check failed: ${e.message || e}`;
@@ -455,14 +1137,21 @@
 
     exportBtn.addEventListener("click", () => {
       if (!result) return;
-      const rows = [["Club ID", "Club Name", "Section", "Have", "Expected", "Missing Dates"]];
-      for (const f of result.findings) {
-        rows.push([f.clubId, f.clubName, f.section, f.have, f.expected, f.missing.join("; ")]);
+      const logicRows = [["Check", "Rule", "Expected", "Actual", "Difference", "Result", "Source", "Note"]];
+      for (const c of result.checks || []) {
+        logicRows.push([c.name, c.rule, c.expected, c.actual, c.kind === "text" ? c.diff : c.diff, c.status, c.source, c.note || ""]);
       }
-      const ws = XLSX.utils.aoa_to_sheet(rows);
+      const clubRows = [["Club", "Check", "Detail"]];
+      for (const f of result.clubIssues || []) clubRows.push([f.club, f.check, f.detail]);
+      const dateRows = [["Club ID", "Club Name", "Section", "Have", "Expected", "Missing Dates", "Status"]];
+      for (const f of result.findings) {
+        dateRows.push([f.clubId, f.clubName, f.section, f.have, f.expected, f.missing.join("; "), f.missing.length === f.expected ? "No date rows" : "Missing days"]);
+      }
       const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, "Missing Dates");
-      XLSX.writeFile(wb, `mtd-production-missing-dates-${result.periodEnd}.csv`);
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(logicRows), "Logic Checks");
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(clubRows), "Club Exceptions");
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(dateRows), "Missing Dates");
+      XLSX.writeFile(wb, `mtd-production-quality-checks-${result.periodEnd}.xlsx`);
     });
 
     (function () {

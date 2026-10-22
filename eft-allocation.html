@@ -809,8 +809,12 @@
       const recapMatchesTax = near(recap, tax);
 
       const delinqClubs = (clubs || []).filter((r) => r.check === "Delinquent Recovery Recap vs EFT");
+      const cycleDelinqClubs = (clubs || []).filter(
+        (r) => r.check === "Current+Previous Cycle Delinquent vs Recap"
+      );
       const collectedClubs = (clubs || []).filter((r) => r.check === "Total Collected in Cycle Recap vs EFT");
       const topClubRows = (clubs || []).filter((r) => r.check === "Top Invoice vs Recap Gross");
+      const findFailed = (re) => failed.find((c) => re.test(c.name));
 
       const period = dateLabel || "the selected period";
       const parts = [];
@@ -820,9 +824,28 @@
         `<p class="body-text">I am looking at the <strong>EFT Allocation</strong> report for <strong>${period}</strong> (${env} · ${workspace}), and I identified the following after QA validation.</p>`
       );
 
+      if (issues.includes("cycle_delinquent")) {
+        const cycleFail = findFailed(/current\+previous cycle delinquent/i);
+        const cur = v.currentCycleDelinqTotal ?? 0;
+        const prev = v.previousCycleDelinqTotal ?? 0;
+        const sum = v.cycleDelinqSum ?? cycleFail?.leftVal ?? cur + prev;
+        const recapD = v.recapDelinquent ?? cycleFail?.rightVal ?? 0;
+        parts.push(
+          `<p class="body-text">There is a discrepancy in <strong>Combined Summary</strong> between <strong>Current + Previous Cycle Delinquent Recovery Collections</strong> and <strong>Collection Success Recap · Delinquent Recovery</strong>:</p>
+           <ul class="club-list body-text">
+             <li><strong>Current Cycle · Total Delinquent Recovery Collections:</strong> ${money(cur)}</li>
+             <li><strong>Previous Cycle · Total Delinquent Recovery Collections:</strong> ${money(prev)}</li>
+             <li><strong>Current + Previous (sum):</strong> ${money(sum)}</li>
+             <li><strong>Recap · Delinquent Recovery:</strong> ${money(recapD)}</li>
+             <li><strong>Diff:</strong> <span class="actual">${money(sum - recapD)}</span></li>
+           </ul>`
+        );
+      }
+
       if (issues.includes("delinquent")) {
-        const L = v.recapDelinquent ?? failed.find((c) => /delinquent/i.test(c.name))?.leftVal ?? 0;
-        const R = v.eftDelinquent ?? failed.find((c) => /delinquent/i.test(c.name))?.rightVal ?? 0;
+        const delinqFail = findFailed(/^delinquent recovery recap vs eft$/i);
+        const L = v.recapDelinquent ?? delinqFail?.leftVal ?? 0;
+        const R = v.eftDelinquent ?? delinqFail?.rightVal ?? 0;
         parts.push(
           `<p class="body-text">There is a discrepancy in <strong>Delinquent Recovery</strong> between Collection Success Recap and EFT Summary:</p>
            <ul class="club-list body-text">
@@ -895,9 +918,22 @@
         );
       }
 
-      const hasClubDetail = delinqClubs.length || collectedClubs.length || topClubRows.length;
+      const hasClubDetail =
+        delinqClubs.length || cycleDelinqClubs.length || collectedClubs.length || topClubRows.length;
       if (hasClubDetail) {
         parts.push(`<p class="body-text"><strong>🔍 Club-level analysis:</strong></p>`);
+        if (cycleDelinqClubs.length) {
+          parts.push(
+            `<p class="body-text">${cycleDelinqClubs
+              .map((r) => {
+                const code = clubCodeDisplay(r.club);
+                return `For Club <strong>${code}</strong>, Current+Previous Cycle Delinquent Collections sum shows ${money(
+                  r.left
+                )} vs Recap Delinquent Recovery ${money(r.right)} (diff ${money(r.diff)})`;
+              })
+              .join(". ")}.</p>`
+          );
+        }
         if (delinqClubs.length) {
           parts.push(
             `<p class="body-text">${delinqClubs
@@ -953,7 +989,17 @@
       }
 
       parts.push(`<p class="body-text"><strong>📌 Conclusion:</strong></p>`);
-      if (issues.includes("delinquent") || issues.includes("collected")) {
+      if (issues.includes("cycle_delinquent")) {
+        const clubEx = cycleDelinqClubs
+          .slice(0, 8)
+          .map((r) => `Club ${clubCodeDisplay(r.club)}`);
+        const uniqClubs = [...new Set(clubEx)];
+        parts.push(
+          `<p class="body-text">This suggests a mismatch between <strong>Current + Previous Cycle Delinquent Recovery Collections</strong> and <strong>Collection Success Recap · Delinquent Recovery</strong>${
+            uniqClubs.length ? ` (impacted club(s): ${uniqClubs.join(" and ")})` : ""
+          }. Please review Combined Summary (and club sheets) for these sections.</p>`
+        );
+      } else if (issues.includes("delinquent") || issues.includes("collected")) {
         const bits = [];
         if (issues.includes("delinquent")) bits.push("Delinquent Recovery");
         if (issues.includes("collected")) bits.push("Total Collected in Cycle");
@@ -1035,9 +1081,17 @@
       const clubChecks = (clubs || []).map((r) => r.check);
       const failHas = (re) => failedNames.some((n) => re.test(n));
       const clubHas = (name) => clubChecks.includes(name);
+      const CYCLE_CHECK = "Current+Previous Cycle Delinquent vs Recap";
 
       const issues = [];
-      if (failHas(/delinquent/i) || clubHas("Delinquent Recovery Recap vs EFT")) {
+      // New Combined Summary cycle check — must be classified before generic delinquent
+      if (failHas(/current\+previous cycle delinquent/i) || clubHas(CYCLE_CHECK)) {
+        issues.push("cycle_delinquent");
+      }
+      if (
+        failHas(/^delinquent recovery recap vs eft$/i) ||
+        clubHas("Delinquent Recovery Recap vs EFT")
+      ) {
         issues.push("delinquent");
       }
       if (failHas(/total collected/i) || clubHas("Total Collected in Cycle Recap vs EFT")) {
@@ -1063,6 +1117,9 @@
     function bugHeadingForIssues(issues, failed, clubs, dateLabel) {
       const period = dateLabel ? ` — ${dateLabel}` : "";
       const labels = [];
+      if (issues.includes("cycle_delinquent")) {
+        labels.push("Current+Previous Cycle Delinquent vs Recap mismatch");
+      }
       if (issues.includes("delinquent")) labels.push("Delinquent Recovery mismatch (Recap vs EFT)");
       if (issues.includes("collected")) labels.push("Total Collected in Cycle mismatch (Recap vs EFT)");
       if (issues.includes("gross")) labels.push("Dues Invoices vs Collection Success Recap Gross mismatch");
@@ -1094,6 +1151,9 @@
         : "<li>No failed summary checks.</li>";
 
       const relevantClubChecks = new Set();
+      if (issues.includes("cycle_delinquent")) {
+        relevantClubChecks.add("Current+Previous Cycle Delinquent vs Recap");
+      }
       if (issues.includes("delinquent")) relevantClubChecks.add("Delinquent Recovery Recap vs EFT");
       if (issues.includes("collected")) relevantClubChecks.add("Total Collected in Cycle Recap vs EFT");
       if (issues.includes("gross") || issues.includes("eft_tax_gross")) {
@@ -1113,6 +1173,11 @@
               r.right
             )} (diff ${money(r.diff)}).`;
           }
+          if (r.check === "Current+Previous Cycle Delinquent vs Recap") {
+            return `For Club ${code}, Current+Previous Cycle Delinquent Collections ${money(
+              r.left
+            )} vs Recap Delinquent Recovery ${money(r.right)} (diff ${money(r.diff)}).`;
+          }
           if (r.check === "Delinquent Recovery Recap vs EFT") {
             return `For Club ${code}, Delinquent Recovery Recap ${money(r.left)} vs EFT Delinquent Recovery ${money(
               r.right
@@ -1131,24 +1196,26 @@
       }
 
       const actualBlocks = [];
+      if (issues.includes("cycle_delinquent")) {
+        const cycleFail = failed.find((c) => /current\+previous cycle delinquent/i.test(c.name));
+        const cur = v.currentCycleDelinqTotal ?? 0;
+        const prev = v.previousCycleDelinqTotal ?? 0;
+        const sum = v.cycleDelinqSum ?? cycleFail?.leftVal ?? cur + prev;
+        const recapD = v.recapDelinquent ?? cycleFail?.rightVal ?? 0;
+        actualBlocks.push(
+          `<p class="actual"><strong>Current Cycle · Total Delinquent Recovery Collections</strong> (${money(
+            cur
+          )}) + <strong>Previous Cycle · Total Delinquent Recovery Collections</strong> (${money(
+            prev
+          )}) = <strong>${money(sum)}</strong>, which does not match <strong>Collection Success Recap · Delinquent Recovery</strong> (${money(
+            recapD
+          )}). Gap = ${money(sum - recapD)}.</p>`
+        );
+      }
       if (issues.includes("delinquent")) {
-        const left = v.recapDelinquent;
-        const right = v.eftDelinquent;
-        const gap =
-          left != null && right != null
-            ? left - right
-            : failed.find((c) => /delinquent/i.test(c.name))
-              ? failed.find((c) => /delinquent/i.test(c.name)).leftVal -
-                failed.find((c) => /delinquent/i.test(c.name)).rightVal
-              : 0;
-        const L =
-          left != null
-            ? left
-            : failed.find((c) => /delinquent/i.test(c.name))?.leftVal ?? 0;
-        const R =
-          right != null
-            ? right
-            : failed.find((c) => /delinquent/i.test(c.name))?.rightVal ?? 0;
+        const delinqFail = failed.find((c) => /^delinquent recovery recap vs eft$/i.test(c.name));
+        const L = v.recapDelinquent ?? delinqFail?.leftVal ?? 0;
+        const R = v.eftDelinquent ?? delinqFail?.rightVal ?? 0;
         actualBlocks.push(
           `<p class="actual">The <strong>Delinquent Recovery</strong> amount in Collection Success Recap (${money(
             L
@@ -1207,6 +1274,14 @@
         "Run the report for the above workspace.",
         "Navigate to the <strong>Combined Summary</strong> and <strong>EFT Summary</strong> tabs.",
       ];
+      if (issues.includes("cycle_delinquent")) {
+        steps.push(
+          "On <strong>Combined Summary</strong>, add <strong>Current Cycle</strong> and <strong>Previous Cycle</strong> <em>Total Delinquent Recovery Collections</em> (Total column)."
+        );
+        steps.push(
+          "Compare that sum with <strong>Delinquent Recovery</strong> under <strong>Collection Success Recap</strong> on the same sheet."
+        );
+      }
       if (issues.includes("delinquent")) {
         steps.push(
           "Compare <strong>Delinquent Recovery</strong> in Collection Success Recap (Combined Summary) with <strong>Delinquent Recovery</strong> on EFT Summary (Grand Total)."
@@ -1230,7 +1305,13 @@
           "Compare <strong>Gross Invoices</strong> Grand Total on EFT Summary vs Tax Summary."
         );
       }
-      if (!issues.includes("delinquent") && !issues.includes("collected") && !issues.includes("gross") && !issues.includes("eft_tax_gross")) {
+      if (
+        !issues.includes("cycle_delinquent") &&
+        !issues.includes("delinquent") &&
+        !issues.includes("collected") &&
+        !issues.includes("gross") &&
+        !issues.includes("eft_tax_gross")
+      ) {
         steps.push("Review the failed QA checks listed in Actual Result.");
       }
       if (relevantClubs.length) {
@@ -1239,6 +1320,11 @@
       }
 
       const expectedBits = [];
+      if (issues.includes("cycle_delinquent")) {
+        expectedBits.push(
+          "<strong>Current Cycle + Previous Cycle Total Delinquent Recovery Collections</strong> should equal <strong>Collection Success Recap · Delinquent Recovery</strong> (Combined Summary and each club sheet), within $0.02."
+        );
+      }
       if (issues.includes("delinquent")) {
         expectedBits.push(
           "<strong>Delinquent Recovery</strong> in Collection Success Recap should match <strong>EFT Summary Delinquent Recovery</strong> (including club-level amounts)."

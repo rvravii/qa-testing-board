@@ -294,7 +294,7 @@
         <div class="collapse-head" id="clubDiffToggle" title="Click to expand / collapse">
           <div>
             <h2 class="section-title" style="margin:0">Club-wise difference</h2>
-            <div class="note" id="clubDiffHint">Top Invoice vs Recap Gross · Recap Delinquent / Total Collected vs EFT</div>
+            <div class="note" id="clubDiffHint">Top Invoice vs Recap Gross · Recap Delinquent / Total Collected vs EFT · Current+Previous Cycle Delinquent vs Recap</div>
           </div>
           <div class="collapse-toggle" id="clubDiffChevron">▾</div>
         </div>
@@ -665,12 +665,45 @@
       return { gross, pretax, clubs };
     }
 
+    function parseCycleDelinquentTotals(rows) {
+      // Current / Previous Cycle Delinquent Recovery sections each end with
+      // "Total Delinquent Recovery Collections" → Total amount col 5.
+      let section = null; // "current" | "previous" | null
+      let currentCycleDelinqTotal = 0;
+      let previousCycleDelinqTotal = 0;
+      for (const row of rows || []) {
+        const label = String(row?.[0] ?? "").trim();
+        if (!label) continue;
+        const low = label.toLowerCase();
+        if (/^current\s+cycle\s+delinquent\s+recovery$/i.test(low)) {
+          section = "current";
+          continue;
+        }
+        if (/^previous\s+cycle\s+delinquent\s+recovery$/i.test(low)) {
+          section = "previous";
+          continue;
+        }
+        if (/collection\s+success\s+recap/i.test(low)) {
+          section = null;
+          continue;
+        }
+        if (!/^total\s+delinquent\s+recovery\s+collections\s*$/i.test(low)) continue;
+        const val = cellNum(row, 5);
+        if (section === "current") currentCycleDelinqTotal = val;
+        else if (section === "previous") previousCycleDelinqTotal = val;
+      }
+      return { currentCycleDelinqTotal, previousCycleDelinqTotal };
+    }
+
     function parseCombinedSummary(rows) {
       // Combined Summary is a high-level sheet (no club table).
       // Top dues: row "Invoices for ..." → Total Amount col 10
       // Collection Success Recap: Gross / Delinquent / Total Collected in Cycle → Total col 5
+      // Current + Previous Cycle "Total Delinquent Recovery Collections" (col 5) should equal Recap Delinquent
       const dues = findRow(rows, (s) => /^invoices for /i.test(s));
       const topInvoice = dues ? cellNum(dues.row, 10) : 0;
+
+      const cycle = parseCycleDelinquentTotals(rows);
 
       const recap = findRow(rows, (s) => s.toLowerCase().includes("collection success recap"));
       if (!recap) throw new Error('Combined Summary: "Collection Success Recap" not found');
@@ -685,6 +718,9 @@
         recapGross: grossRecap ? cellNum(grossRecap.row, 5) : 0,
         recapDelinquent: delinqRecap ? cellNum(delinqRecap.row, 5) : 0,
         recapTotalCollected: collectedRecap ? cellNum(collectedRecap.row, 5) : 0,
+        currentCycleDelinqTotal: cycle.currentCycleDelinqTotal,
+        previousCycleDelinqTotal: cycle.previousCycleDelinqTotal,
+        cycleDelinqSum: cycle.currentCycleDelinqTotal + cycle.previousCycleDelinqTotal,
       };
     }
 
@@ -1357,7 +1393,17 @@
         else if (low === "delinquent recovery") recapDelinquent = cellNum(row, 5);
         else if (low === "total collected in cycle") recapTotalCollected = cellNum(row, 5);
       }
-      return { clubName, topInvoice, recapGross, recapDelinquent, recapTotalCollected };
+      const cycle = parseCycleDelinquentTotals(rows);
+      return {
+        clubName,
+        topInvoice,
+        recapGross,
+        recapDelinquent,
+        recapTotalCollected,
+        currentCycleDelinqTotal: cycle.currentCycleDelinqTotal,
+        previousCycleDelinqTotal: cycle.previousCycleDelinqTotal,
+        cycleDelinqSum: cycle.currentCycleDelinqTotal + cycle.previousCycleDelinqTotal,
+      };
     }
 
     function parseEftClubsByCode(eftRows) {
@@ -1411,6 +1457,14 @@
             "Total Collected in Cycle Recap vs EFT",
             m.recapTotalCollected,
             eft.totalCollected
+          );
+        }
+        if (m.recapDelinquent != null) {
+          pushDiff(
+            clubLabel,
+            "Current+Previous Cycle Delinquent vs Recap",
+            m.cycleDelinqSum,
+            m.recapDelinquent
           );
         }
       }
@@ -1787,6 +1841,13 @@
             rightLabel: "EFT Total Collected",
             rightVal: eft.totalCollected,
           },
+          {
+            name: "Current+Previous Cycle Delinquent vs Recap",
+            leftLabel: "Combined · Current + Previous Cycle Delinquent Recovery Collections",
+            leftVal: comb.cycleDelinqSum,
+            rightLabel: "Recap · Delinquent Recovery",
+            rightVal: comb.recapDelinquent,
+          },
         ];
 
         const passCount = checks.filter((c) => near(c.leftVal, c.rightVal)).length;
@@ -1800,7 +1861,8 @@
         const needClubScan =
           !near(comb.topInvoice, comb.recapGross) ||
           !near(comb.recapDelinquent, eft.delinquent) ||
-          !near(comb.recapTotalCollected, eft.totalCollected);
+          !near(comb.recapTotalCollected, eft.totalCollected) ||
+          !near(comb.cycleDelinqSum, comb.recapDelinquent);
         $("kClub").textContent = needClubScan ? "…" : "0";
         $("clubBody").innerHTML = needClubScan
           ? `<tr><td colspan="5" class="note">Scanning club sheets…</td></tr>`
@@ -1820,6 +1882,9 @@
             eftDelinquent: eft.delinquent,
             recapTotalCollected: comb.recapTotalCollected,
             eftTotalCollected: eft.totalCollected,
+            currentCycleDelinqTotal: comb.currentCycleDelinqTotal,
+            previousCycleDelinqTotal: comb.previousCycleDelinqTotal,
+            cycleDelinqSum: comb.cycleDelinqSum,
           },
           asOf,
           dateLabel: formatBugDate(asOf),
@@ -1834,7 +1899,7 @@
 
         if (needClubScan) {
           $("clubMeta").textContent =
-            "Scanning club sheets for Top vs Recap and Recap vs EFT (Delinquent / Total Collected)…";
+            "Scanning club sheets for Top vs Recap, Recap vs EFT (Delinquent / Total Collected), and Current+Previous Cycle Delinquent vs Recap…";
           await new Promise((r) => setTimeout(r, 40));
           const wbFull = XLSX.read(fileBuffer, { type: "array" });
           const eftRows = sheetRows(wbFull, eftName);

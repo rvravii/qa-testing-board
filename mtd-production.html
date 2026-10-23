@@ -45,7 +45,7 @@
     }
     .btn.ghost { background: transparent; color: var(--text); border: 1px solid var(--line); }
     .btn:disabled { opacity: 0.45; cursor: not-allowed; }
-    .kpis { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; margin-top: 12px; }
+    .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-top: 12px; }
     .kpi { background: #0b1324; border: 1px solid var(--line); border-radius: 12px; padding: 12px; }
     .kpi .l { color: var(--muted); font-size: 0.72rem; font-weight: 600; }
     .kpi .v { font-size: 1.3rem; font-weight: 800; margin-top: 4px; }
@@ -58,6 +58,12 @@
     .pill.bad { background: var(--status-fail-bg); color: var(--bad); border: 1px solid var(--status-fail-border); }
     .pill.warn { background: rgba(251, 191, 36, 0.16); color: var(--warn); border: 1px solid rgba(251, 191, 36, 0.45); }
     .pill.info { background: rgba(59, 130, 246, 0.14); color: #93c5fd; border: 1px solid rgba(59, 130, 246, 0.35); }
+    .pill.expected { background: rgba(251, 191, 36, 0.16); color: var(--warn); border: 1px solid rgba(251, 191, 36, 0.45); }
+    .sec-chip {
+      display: inline-block; margin: 2px 4px 2px 0; padding: 2px 8px; border-radius: 6px;
+      background: rgba(148, 163, 184, 0.12); color: #cbd5e1; border: 1px solid var(--line);
+      font-size: 0.74rem;
+    }
     table { width: 100%; border-collapse: collapse; font-size: 0.86rem; }
     th, td { padding: 9px 8px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
     th { color: var(--muted); font-weight: 600; position: sticky; top: 0; background: #0f172a; }
@@ -122,7 +128,8 @@
         Upload the <strong>MTD Production</strong> workbook. The page checks the <strong>Summary</strong> sheet
         against the Summary Legend (member totals, membership mix, paymode, gender, annual fees, invoices, and joins),
         then checks every club tab for a missing day in <strong>IN CLUB JOINS</strong>, <strong>VOLUNTARY CANCELS</strong>,
-        and <strong>Transfers In</strong>. Paymode has no total row — the check adds ACH, Reversal, Problem, Credit Card, and Non Billing.
+        and <strong>Transfers In</strong> (one row per club). Gaps on <strong>PFAQ association clubs</strong> (embedded list) are tagged
+        <strong>Expected</strong>. Paymode has no total row — the check adds ACH, Reversal, Problem, Credit Card, and Non Billing.
       </div>
       <div class="upload-row">
         <input type="file" id="fileInput" accept=".xlsx,.xls,.xlsm" />
@@ -212,6 +219,7 @@
               <th>Club</th>
               <th>Check</th>
               <th>Detail</th>
+              <th>Flag</th>
             </tr>
           </thead>
           <tbody id="clubBody"></tbody>
@@ -241,9 +249,19 @@
           <div class="hint">Full date coverage</div>
         </div>
         <div class="kpi">
-          <div class="l">Missing dates</div>
+          <div class="l">Clubs with gaps</div>
           <div class="v bad" id="kpiBad">—</div>
-          <div class="hint">Clubs with gaps</div>
+          <div class="hint">1 row per club</div>
+        </div>
+        <div class="kpi">
+          <div class="l">Unexpected gaps</div>
+          <div class="v bad" id="kpiUnexpected">—</div>
+          <div class="hint">Not on PFAQ list</div>
+        </div>
+        <div class="kpi">
+          <div class="l">Expected (PFAQ)</div>
+          <div class="v warn" id="kpiExpectedPfaq">—</div>
+          <div class="hint">Association clubs</div>
         </div>
       </div>
 
@@ -254,10 +272,9 @@
           <thead>
             <tr>
               <th>Club</th>
-              <th>Section</th>
-              <th>Have</th>
-              <th>Expected</th>
+              <th>Sections with gaps</th>
               <th>Missing dates</th>
+              <th>Flag</th>
               <th>Status</th>
             </tr>
           </thead>
@@ -295,7 +312,8 @@
           <li>Read every club sheet.</li>
           <li>For IN CLUB JOINS, VOLUNTARY CANCELS, and Transfers In, collect the Date rows.</li>
           <li>Build the calendar from the earliest date in the file through the latest.</li>
-          <li>Highlight a club when a day is missing, or when the section has no date rows at all.</li>
+          <li>Highlight a club when a day is missing, or when the section has no date rows at all — one row per club.</li>
+          <li>Clubs on the embedded PF/PFAQ association list are tagged <strong>Expected (PFAQ)</strong>; others with gaps are <strong>Unexpected</strong>.</li>
         </ul>
       </div>
     </div>
@@ -304,6 +322,27 @@
   <script>
     const SKIP = new Set(["Legend", "Summary Legend", "Daily Summary", "Summary"]);
     const TRACKED = ["IN CLUB JOINS", "VOLUNTARY CANCELS", "Transfers In"];
+    // Embedded from PF PFAQ CLUB ASSOCIATION LIST (PF Club # + PFAQ Club #). Update via pfaq-clubs.json.
+    const PFAQ_CLUB_CODES = new Set(["45","81","92","194","480","503","525","543","657","682","728","849","909","944","967","1458","1504","1624","1726","1796","2001","2186","2502","2801","2803","2984","3371","3400","4232","4432","4684","4905","5802","5982","6188","6802","6993","7033","7202","7211","7252","7632","7767","7952","7953","8025","8139","8154","8169","8317","8370","8756","8885","8987","9025","9349","9509","9579","9677","9905","9967","80045","80081","80092","80480","80503","80543","80657","80682","80849","81458","81624","81690","81726","81796","82186","82803","82841","83157","83471","83959","84274","84283","84453","84603","84624","85319","85320","85322","85323","85772","85773","85982","86082","86087","87033","87211","87632","88154","88169","88370","88756","89349","90728","91504","91690","92841","93157","93371","93400","93471","93959","94274","94283","94453","94603","94624","95319","95320","95322","95323","95772","95773","96082","96087","96188","96993"]);
+
+    function normalizeClubCode(v) {
+      if (v == null || v === "") return "";
+      if (typeof v === "number" && Number.isFinite(v)) return String(Math.trunc(v));
+      const s = String(v).trim();
+      const m = s.match(/^0*(\d+)\b/);
+      return m ? String(parseInt(m[1], 10)) : "";
+    }
+
+    function isPfaqClub(clubOrId) {
+      const code = normalizeClubCode(clubOrId);
+      return code ? PFAQ_CLUB_CODES.has(code) : false;
+    }
+
+    function pfaqFlag(clubOrId) {
+      return isPfaqClub(clubOrId)
+        ? { key: "expected", label: "Expected (PFAQ)" }
+        : { key: "unexpected", label: "Unexpected" };
+    }
 
     const fileInput = document.getElementById("fileInput");
     const runBtn = document.getElementById("runBtn");
@@ -774,14 +813,14 @@
           const id = name.split("-")[0].trim();
           if (seen.has(id)) {
             dupes += 1;
-            clubIssues.push({ club: name, check: "Duplicate club", detail: `Same club id as ${seen.get(id)}` });
+            clubIssues.push({ club: name, clubId: id, check: "Duplicate club", detail: `Same club id as ${seen.get(id)}` });
           } else seen.set(id, name);
 
           const gross = grossCol >= 0 ? num(row[grossCol]) || 0 : 0;
           grossSum += gross;
           if (gross < -0.009) {
             negGross += 1;
-            clubIssues.push({ club: name, check: "Negative gross invoice", detail: gross.toLocaleString("en-US", { style: "currency", currency: "USD" }) });
+            clubIssues.push({ club: name, clubId: id, check: "Negative gross invoice", detail: gross.toLocaleString("en-US", { style: "currency", currency: "USD" }) });
           }
 
           const channelTotals = [];
@@ -789,11 +828,11 @@
             const parts = g.types.reduce((a, c) => a + (num(row[c]) || 0), 0);
             const total = g.total === null ? null : (num(row[g.total]) || 0);
             if (g.types.some((c) => (num(row[c]) || 0) < 0)) {
-              clubIssues.push({ club: name, check: "Negative join count", detail: g.name });
+              clubIssues.push({ club: name, clubId: id, check: "Negative join count", detail: g.name });
             }
             if (total !== null && Math.abs(parts - total) > 0.01) {
               joinOff += 1;
-              clubIssues.push({ club: name, check: "Join types vs channel total", detail: `${g.name}: types ${parts} vs total ${total}` });
+              clubIssues.push({ club: name, clubId: id, check: "Join types vs channel total", detail: `${g.name}: types ${parts} vs total ${total}` });
             }
             if (total !== null) channelTotals.push(total);
           });
@@ -803,13 +842,13 @@
             const posted = num(row[extra.extraTotal]) || 0;
             if (Math.abs(combined - posted) > 0.01) {
               channelOff += 1;
-              clubIssues.push({ club: name, check: "Channel totals vs combined joins", detail: `In Club + Web + Mobile ${combined} vs combined total ${posted}` });
+              clubIssues.push({ club: name, clubId: id, check: "Channel totals vs combined joins", detail: `In Club + Web + Mobile ${combined} vs combined total ${posted}` });
             }
           }
           const joinSum = channelTotals.reduce((a, n) => a + n, 0);
           if (gross > 0.009 && joinSum === 0) {
             zeroJoins += 1;
-            clubIssues.push({ club: name, check: "Invoices with no joins", detail: `Gross invoices ${gross.toLocaleString("en-US", { style: "currency", currency: "USD" })} and all three join channels are 0` });
+            clubIssues.push({ club: name, clubId: id, check: "Invoices with no joins", detail: `Gross invoices ${gross.toLocaleString("en-US", { style: "currency", currency: "USD" })} and all three join channels are 0` });
           }
 
           if (achCol !== null && ccCol !== null) {
@@ -823,7 +862,7 @@
               const sum = (ach || 0) + (cc || 0);
               if (Math.abs(sum - 1) > 0.02) {
                 payOff += 1;
-                clubIssues.push({ club: name, check: "Paymode percent", detail: `ACH% + CC% = ${(sum * 100).toFixed(2)}%` });
+                clubIssues.push({ club: name, clubId: id, check: "Paymode percent", detail: `ACH% + CC% = ${(sum * 100).toFixed(2)}%` });
               }
             }
           }
@@ -931,6 +970,11 @@
       }
 
       if (!allDates.size) {
+        const clubIssues = (logic.clubIssues || []).map((row) => {
+          const id = row.clubId || normalizeClubCode(row.club);
+          const flag = pfaqFlag(id);
+          return { ...row, clubId: id, pfaqExpected: flag.key === "expected", flagKey: flag.key, flagLabel: flag.label };
+        });
         return {
           fileName,
           clubTabs: clubSheets.length,
@@ -939,11 +983,16 @@
           expectedDays: 0,
           clubsOk: 0,
           clubsBad: 0,
+          dateExpected: 0,
+          dateUnexpected: 0,
           findings: [],
           dateNote: "No date rows found on club tabs.",
           checks: logic.checks,
-          clubIssues: logic.clubIssues,
+          clubIssues,
+          clubExcExpected: clubIssues.filter((r) => r.pfaqExpected).length,
+          clubExcUnexpected: clubIssues.filter((r) => !r.pfaqExpected).length,
           summaryClubs: logic.summaryClubs,
+          pfaqListSize: PFAQ_CLUB_CODES.size,
         };
       }
       const sorted = [...allDates].sort();
@@ -954,24 +1003,60 @@
       const findings = [];
       let ok = 0;
       for (const club of clubSections) {
-        let bad = false;
+        const sectionGaps = [];
+        const missingUnion = new Set();
+        let anyFullMiss = false;
         for (const sec of TRACKED) {
           const have = club.sections[sec] || new Set();
           const missing = expected.filter((d) => !have.has(d));
           if (missing.length) {
-            bad = true;
-            findings.push({
-              clubId: club.sheet,
-              clubName: clubNames[club.sheet] || club.sheet,
+            missing.forEach((d) => missingUnion.add(d));
+            if (missing.length === expected.length) anyFullMiss = true;
+            sectionGaps.push({
               section: sec,
               have: have.size,
-              expected: expected.length,
+              missingCount: missing.length,
               missing,
+              fullMiss: missing.length === expected.length,
             });
           }
         }
-        if (!bad) ok += 1;
+        if (!sectionGaps.length) {
+          ok += 1;
+          continue;
+        }
+        const flag = pfaqFlag(club.sheet);
+        findings.push({
+          clubId: club.sheet,
+          clubName: clubNames[club.sheet] || club.sheet,
+          expected: expected.length,
+          sections: sectionGaps,
+          missing: [...missingUnion].sort(),
+          fullMiss: anyFullMiss,
+          pfaqExpected: flag.key === "expected",
+          flagKey: flag.key,
+          flagLabel: flag.label,
+        });
       }
+
+      findings.sort((a, b) => {
+        if (a.pfaqExpected !== b.pfaqExpected) return a.pfaqExpected ? 1 : -1;
+        const na = Number(normalizeClubCode(a.clubId));
+        const nb = Number(normalizeClubCode(b.clubId));
+        if (Number.isFinite(na) && Number.isFinite(nb) && na !== nb) return na - nb;
+        return String(a.clubId).localeCompare(String(b.clubId), undefined, { numeric: true });
+      });
+
+      const dateExpected = findings.filter((f) => f.pfaqExpected).length;
+      const dateUnexpected = findings.filter((f) => !f.pfaqExpected).length;
+
+      const clubIssues = (logic.clubIssues || []).map((row) => {
+        const id = row.clubId || normalizeClubCode(row.club);
+        const flag = pfaqFlag(id);
+        return { ...row, clubId: id, pfaqExpected: flag.key === "expected", flagKey: flag.key, flagLabel: flag.label };
+      });
+      const clubExcExpected = clubIssues.filter((r) => r.pfaqExpected).length;
+      const clubExcUnexpected = clubIssues.filter((r) => !r.pfaqExpected).length;
 
       return {
         fileName,
@@ -981,12 +1066,17 @@
         expectedDays: expected.length,
         expected,
         clubsOk: ok,
-        clubsBad: new Set(findings.map((f) => f.clubId)).size,
+        clubsBad: findings.length,
+        dateExpected,
+        dateUnexpected,
         findings,
         dateNote: "",
         checks: logic.checks,
-        clubIssues: logic.clubIssues,
+        clubIssues,
+        clubExcExpected,
+        clubExcUnexpected,
         summaryClubs: logic.summaryClubs,
+        pfaqListSize: PFAQ_CLUB_CODES.size,
       };
     }
 
@@ -1024,19 +1114,32 @@
       document.getElementById("kpiDays").textContent = String(result.expectedDays);
       document.getElementById("kpiOk").textContent = String(result.clubsOk);
       document.getElementById("kpiBad").textContent = String(result.clubsBad);
+      document.getElementById("kpiUnexpected").textContent = String(result.dateUnexpected || 0);
+      document.getElementById("kpiExpectedPfaq").textContent = String(result.dateExpected || 0);
 
       const banner = document.getElementById("statusBanner");
-      const problems = [];
-      if (logicFails) problems.push(`${logicFails} summary logic check${logicFails === 1 ? "" : "s"} failed`);
-      if (issues.length) problems.push(`${issues.length} club exception${issues.length === 1 ? "" : "s"}`);
-      if (result.clubsBad) problems.push(`${result.clubsBad} club tab${result.clubsBad === 1 ? "" : "s"} missing dates`);
-      if (result.dateNote) problems.push(result.dateNote);
-      if (!problems.length) {
+      const dateUnexpected = result.dateUnexpected || 0;
+      const dateExpected = result.dateExpected || 0;
+      const clubExcUnexpected = result.clubExcUnexpected || 0;
+      const clubExcExpected = result.clubExcExpected || 0;
+      const blockers = [];
+      if (logicFails) blockers.push(`${logicFails} summary logic check${logicFails === 1 ? "" : "s"} failed`);
+      if (clubExcUnexpected) blockers.push(`${clubExcUnexpected} unexpected club exception${clubExcUnexpected === 1 ? "" : "s"}`);
+      if (dateUnexpected) blockers.push(`${dateUnexpected} unexpected club${dateUnexpected === 1 ? "" : "s"} missing dates`);
+      if (result.dateNote) blockers.push(result.dateNote);
+      const expectedNotes = [];
+      if (clubExcExpected) expectedNotes.push(`${clubExcExpected} PFAQ club exception${clubExcExpected === 1 ? "" : "s"}`);
+      if (dateExpected) expectedNotes.push(`${dateExpected} PFAQ club${dateExpected === 1 ? "" : "s"} with date gaps`);
+      if (!blockers.length) {
         banner.className = "banner pass";
-        banner.innerHTML = `<strong class="ok">Pass</strong> — ${checks.length} summary logic checks agree, and all ${result.clubTabs} club tabs have full date coverage (${result.expectedDays} days).`;
+        const extra = expectedNotes.length
+          ? ` · <span class="warn">${expectedNotes.join(" · ")}</span> tagged Expected (PFAQ list · ${result.pfaqListSize || PFAQ_CLUB_CODES.size} codes)`
+          : "";
+        banner.innerHTML = `<strong class="ok">Pass</strong> — ${checks.length} summary logic checks agree, and no unexpected date gaps across ${result.clubTabs} club tabs (${result.expectedDays} days)${extra}.`;
       } else {
         banner.className = "banner fail";
-        banner.innerHTML = `<strong class="bad">Fail</strong> — ${problems.join(" · ")}.`;
+        const extra = expectedNotes.length ? ` · Also ${expectedNotes.join(" · ")} (Expected / PFAQ)` : "";
+        banner.innerHTML = `<strong class="bad">Fail</strong> — ${blockers.join(" · ")}${extra}.`;
       }
 
       document.getElementById("logicBody").innerHTML = checks.map((c) => `
@@ -1053,35 +1156,40 @@
 
       const shown = issues.slice(0, 80);
       document.getElementById("clubMeta").textContent = issues.length
-        ? `${issues.length} exception${issues.length === 1 ? "" : "s"}${issues.length > shown.length ? ` · showing ${shown.length}` : ""}`
+        ? `${issues.length} exception${issues.length === 1 ? "" : "s"} · ${result.clubExcUnexpected || 0} unexpected · ${result.clubExcExpected || 0} Expected (PFAQ)${issues.length > shown.length ? ` · showing ${shown.length}` : ""}`
         : "No club-level exceptions on the Summary list.";
       document.getElementById("clubBody").innerHTML = shown.length ? shown.map((f) => `
         <tr>
           <td><strong>${escapeHtml(f.club)}</strong></td>
           <td>${escapeHtml(f.check)}</td>
           <td>${escapeHtml(f.detail)}</td>
+          <td><span class="pill ${f.flagKey === "expected" ? "expected" : "bad"}">${escapeHtml(f.flagLabel || "Unexpected")}</span></td>
         </tr>
-      `).join("") : `<tr><td colspan="3" class="note">Every Summary club row passed the join, invoice, duplicate, and paymode rules.</td></tr>`;
+      `).join("") : `<tr><td colspan="4" class="note">Every Summary club row passed the join, invoice, duplicate, and paymode rules.</td></tr>`;
 
       document.getElementById("filterMeta").textContent = result.dateNote
         ? result.dateNote
-        : `${result.findings.length} section finding(s) · a full miss means the section has a Grand Total and no daily rows`;
+        : `${result.findings.length} club(s) with gaps · ${result.dateUnexpected || 0} unexpected · ${result.dateExpected || 0} Expected (PFAQ) · PFAQ list ${result.pfaqListSize || PFAQ_CLUB_CODES.size} codes · one row per club`;
 
       const body = document.getElementById("findingsBody");
       if (!result.findings.length) {
-        body.innerHTML = `<tr><td colspan="6" class="note">No missing dates — all tracked sections complete.</td></tr>`;
+        body.innerHTML = `<tr><td colspan="5" class="note">No missing dates — all tracked sections complete.</td></tr>`;
         return;
       }
       body.innerHTML = result.findings.map((f) => {
-        const allMissing = f.missing.length === f.expected;
+        const secHtml = (f.sections || [])
+          .map((s) => {
+            const tip = s.fullMiss ? "no date rows" : `${s.missingCount} missing`;
+            return `<span class="sec-chip">${escapeHtml(s.section)} · ${tip}</span>`;
+          })
+          .join("");
         return `
         <tr>
           <td><strong>${escapeHtml(f.clubName)}</strong><div class="meta">tab ${escapeHtml(f.clubId)}</div></td>
-          <td>${escapeHtml(f.section)}</td>
-          <td>${f.have}</td>
-          <td>${f.expected}</td>
-          <td>${f.missing.map((d) => `<span class="miss-chip">${d}</span>`).join("")}</td>
-          <td><span class="pill bad">${allMissing ? "No date rows" : "Missing days"}</span></td>
+          <td>${secHtml}</td>
+          <td>${(f.missing || []).map((d) => `<span class="miss-chip">${d}</span>`).join("")}</td>
+          <td><span class="pill ${f.flagKey === "expected" ? "expected" : "bad"}">${escapeHtml(f.flagLabel || "Unexpected")}</span></td>
+          <td><span class="pill ${f.flagKey === "expected" ? "expected" : "bad"}">${f.fullMiss ? "No date rows" : "Missing days"}</span></td>
         </tr>`;
       }).join("");
     }
@@ -1125,7 +1233,7 @@
         render();
         exportBtn.disabled = false;
         const logicFails = (result.checks || []).filter((c) => c.status === "Fail").length;
-        fileMeta.textContent = `Done: ${fileName} — ${logicFails} logic fail · ${result.clubIssues.length} club exception · ${result.clubsBad} tabs missing dates · ${result.periodStart} → ${result.periodEnd}`;
+        fileMeta.textContent = `Done: ${fileName} — ${logicFails} logic fail · ${result.clubIssues.length} club exception (${result.clubExcUnexpected || 0} unexpected / ${result.clubExcExpected || 0} PFAQ) · ${result.clubsBad} clubs missing dates (${result.dateUnexpected || 0} unexpected / ${result.dateExpected || 0} PFAQ) · ${result.periodStart} → ${result.periodEnd}`;
       } catch (e) {
         console.error(e);
         fileMeta.textContent = `Check failed: ${e.message || e}`;
@@ -1141,11 +1249,23 @@
       for (const c of result.checks || []) {
         logicRows.push([c.name, c.rule, c.expected, c.actual, c.kind === "text" ? c.diff : c.diff, c.status, c.source, c.note || ""]);
       }
-      const clubRows = [["Club", "Check", "Detail"]];
-      for (const f of result.clubIssues || []) clubRows.push([f.club, f.check, f.detail]);
-      const dateRows = [["Club ID", "Club Name", "Section", "Have", "Expected", "Missing Dates", "Status"]];
+      const clubRows = [["Club", "Club ID", "Check", "Detail", "Flag"]];
+      for (const f of result.clubIssues || []) {
+        clubRows.push([f.club, f.clubId || "", f.check, f.detail, f.flagLabel || ""]);
+      }
+      const dateRows = [["Club ID", "Club Name", "Sections with gaps", "Missing Dates", "Flag", "Status"]];
       for (const f of result.findings) {
-        dateRows.push([f.clubId, f.clubName, f.section, f.have, f.expected, f.missing.join("; "), f.missing.length === f.expected ? "No date rows" : "Missing days"]);
+        const secs = (f.sections || [])
+          .map((s) => `${s.section} (${s.fullMiss ? "no date rows" : s.missingCount + " missing"})`)
+          .join("; ");
+        dateRows.push([
+          f.clubId,
+          f.clubName,
+          secs,
+          (f.missing || []).join("; "),
+          f.flagLabel || "",
+          f.fullMiss ? "No date rows" : "Missing days",
+        ]);
       }
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(logicRows), "Logic Checks");

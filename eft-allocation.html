@@ -270,10 +270,10 @@
         <strong>Generate Comment</strong> drafts a team update from the same findings (including Royalty when run).
       </div>
       <div class="note" style="margin-top:8px">
-        Reads <strong>EFT Summary</strong>, <strong>Tax Summary</strong>, and <strong>Combined Summary</strong> only.
+        Runs summary checks on <strong>EFT Summary</strong>, <strong>Tax Summary</strong>, and <strong>Combined Summary</strong>,
+        then <strong>always</strong> scans every club sheet (even when summary totals match) so offsetting club errors are not missed.
       </div>
       <div class="note" style="margin-top:8px">
-        <strong>New check (2026-10-22):</strong>
         Current Cycle + Previous Cycle <em>Total Delinquent Recovery Collections</em>
         must equal Collection Success Recap <em>Delinquent Recovery</em>
         (summary + club-wise).
@@ -1961,15 +1961,8 @@
         $("kFail").textContent = String(failCount);
 
         clubMismatchRows = [];
-        const needClubScan =
-          !near(comb.topInvoice, comb.recapGross) ||
-          !near(comb.recapDelinquent, eft.delinquent) ||
-          !near(comb.recapTotalCollected, eft.totalCollected) ||
-          !near(comb.cycleDelinqSum, comb.recapDelinquent);
-        $("kClub").textContent = needClubScan ? "…" : "0";
-        $("clubBody").innerHTML = needClubScan
-          ? `<tr><td colspan="5" class="note">Scanning club sheets…</td></tr>`
-          : `<tr><td colspan="5" class="pass">No club-level scan needed — summary Top / Recap / EFT amounts align.</td></tr>`;
+        $("kClub").textContent = "…";
+        $("clubBody").innerHTML = `<tr><td colspan="5" class="note">Scanning all club sheets…</td></tr>`;
         $("results").classList.remove("hidden");
         setCollapsed($("clubDiffBody"), $("clubDiffChevron"), false);
 
@@ -1996,28 +1989,26 @@
         };
         refreshActionButtons();
         updateRoyaltyRunEnabled();
-        $("meta").textContent = `${fileName} · Tax clubs: ${tax.clubs.length} · summary done`;
+        $("meta").textContent = `${fileName} · Tax clubs: ${tax.clubs.length} · summary done · scanning clubs…`;
         // Don't keep Run disabled during long club scan
         $("runBtn").disabled = false;
 
-        if (needClubScan) {
-          $("clubMeta").textContent =
-            "Scanning club sheets for Top vs Recap, Recap vs EFT (Delinquent / Total Collected), and Current+Previous Cycle Delinquent vs Recap…";
-          await new Promise((r) => setTimeout(r, 40));
-          const wbFull = XLSX.read(fileBuffer, { type: "array" });
-          const eftRows = sheetRows(wbFull, eftName);
-          const eftByCode = parseEftClubsByCode(eftRows);
-          clubMismatchRows = findClubMismatches(wbFull, eftByCode);
-          clubMismatchRows.sort((a, b) => {
-            const ca = normalizeClubCode(a.club) || a.club;
-            const cb = normalizeClubCode(b.club) || b.club;
-            const na = Number(ca);
-            const nb = Number(cb);
-            if (Number.isFinite(na) && Number.isFinite(nb) && na !== nb) return na - nb;
-            if (a.check !== b.check) return String(a.check).localeCompare(String(b.check));
-            return String(ca).localeCompare(String(cb), undefined, { numeric: true });
-          });
-        }
+        $("clubMeta").textContent =
+          "Always scanning club sheets for Top vs Recap, Recap vs EFT (Delinquent / Total Collected), and Current+Previous Cycle Delinquent vs Recap (even when summary totals match)…";
+        await new Promise((r) => setTimeout(r, 40));
+        const wbFull = XLSX.read(fileBuffer, { type: "array" });
+        const eftRows = sheetRows(wbFull, eftName);
+        const eftByCode = parseEftClubsByCode(eftRows);
+        clubMismatchRows = findClubMismatches(wbFull, eftByCode);
+        clubMismatchRows.sort((a, b) => {
+          const ca = normalizeClubCode(a.club) || a.club;
+          const cb = normalizeClubCode(b.club) || b.club;
+          const na = Number(ca);
+          const nb = Number(cb);
+          if (Number.isFinite(na) && Number.isFinite(nb) && na !== nb) return na - nb;
+          if (a.check !== b.check) return String(a.check).localeCompare(String(b.check));
+          return String(ca).localeCompare(String(cb), undefined, { numeric: true });
+        });
 
         $("kClub").textContent = String(clubMismatchRows.length);
         $("clubBody").innerHTML = clubMismatchRows.length
@@ -2042,9 +2033,7 @@
             )} · Collected Recap − EFT = ${money(
               comb.recapTotalCollected - eft.totalCollected
             )}`
-          : needClubScan
-            ? "Summary showed a gap, but no club sheet differences were found within $0.02."
-            : "Summary Top / Recap / EFT amounts align — club scan skipped.";
+          : "All club sheets checked — no Top Invoice / Recap / EFT differences within $0.02 (scan always runs, even when summary matches).";
         $("exportClubCsvBtn").disabled = clubMismatchRows.length === 0;
         setCollapsed($("clubDiffBody"), $("clubDiffChevron"), clubMismatchRows.length === 0);
 

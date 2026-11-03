@@ -406,6 +406,9 @@
           Download creates a spreadsheet with <em>only that org’s rows</em>, named
           <code>AJE Adjustment File {Report Month} - {Org}.xlsx</code>
           (example: <code>AJE Adjustment File June 2026 - G0001.xlsx</code>).
+          Sheet <code>total out of balance</code> columns:
+          Org, Upgrade Date (<code>YYYYMMDD</code>), Club Number, AJE Out of Balance Total,
+          Blank Payment Type Amount, Other Amount.
         </div>
         <div class="kpis" id="orgKpiRow" style="margin-top:12px">
           <div class="kpi">
@@ -1165,16 +1168,17 @@
     const downloadAllOrgBtn = document.getElementById("downloadAllOrgBtn");
 
     function mapOrgCols(headerRow) {
-      const idx = { month: -1, org: -1, total: -1, blank: -1, other: -1, club: -1 };
+      const idx = { month: -1, org: -1, total: -1, blank: -1, other: -1, club: -1, upgrade: -1 };
       (headerRow || []).forEach((h, i) => {
         const k = blank(h).toLowerCase();
         if (!k) return;
         if (k === "report month" || k === "month") idx.month = i;
         else if (k === "organization" || k === "org" || k === "group" || k === "org id") idx.org = i;
-        else if (k.includes("total out of balance") || k === "total out of balance amount") idx.total = i;
+        else if (k.includes("out of balance")) idx.total = i;
         else if (k.includes("blank payment")) idx.blank = i;
         else if (k === "other amount" || k === "other") idx.other = i;
         else if (k.includes("club number") || k === "club") idx.club = i;
+        else if (k.includes("upgrade") && k.includes("date")) idx.upgrade = i;
       });
       // fallbacks by position if labels differ slightly
       if (idx.org < 0) idx.org = 1;
@@ -1263,54 +1267,87 @@
       return `AJE Adjustment File ${m} - ${g}.xlsx`;
     }
 
-    function toIsoDate(value) {
+    function toYmdNumber(value) {
       if (value == null || value === "") return "";
-      if (value instanceof Date && !Number.isNaN(value.getTime())) {
-        const y = value.getFullYear();
-        const m = String(value.getMonth() + 1).padStart(2, "0");
-        const d = String(value.getDate()).padStart(2, "0");
-        return `${y}-${m}-${d}`;
-      }
-      const fromSerial = (n) => {
-        if (!Number.isFinite(n) || n < 20000 || n > 80000) return "";
-        const p = XLSX.SSF.parse_date_code(n);
-        if (!p || !p.y) return "";
-        return `${p.y}-${String(p.m).padStart(2, "0")}-${String(p.d).padStart(2, "0")}`;
+      const pack = (y, m, d) => {
+        if (!y || m < 1 || m > 12 || d < 1 || d > 31) return "";
+        return y * 10000 + m * 100 + d;
       };
-      if (typeof value === "number") return fromSerial(value) || String(value);
-      const s = String(value).trim();
-      if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
-      const mdy = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
-      if (mdy) return `${mdy[3]}-${mdy[1].padStart(2, "0")}-${mdy[2].padStart(2, "0")}`;
-      if (/^\d{5}(\.\d+)?$/.test(s)) {
-        const iso = fromSerial(Number(s));
-        if (iso) return iso;
+      if (value instanceof Date && !Number.isNaN(value.getTime())) {
+        return pack(value.getFullYear(), value.getMonth() + 1, value.getDate());
       }
-      return s;
+      if (typeof value === "number" && Number.isFinite(value)) {
+        const y = Math.trunc(value / 10000);
+        const m = Math.trunc((value % 10000) / 100);
+        const d = Math.trunc(value % 100);
+        if (y >= 1900 && y <= 2100 && pack(y, m, d) === Math.trunc(value)) return Math.trunc(value);
+        if (value > 20000 && value < 80000) {
+          const p = XLSX.SSF.parse_date_code(value);
+          if (p && p.y) return pack(p.y, p.m, p.d);
+        }
+        return "";
+      }
+      const s = String(value).trim();
+      let m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+      if (m) return pack(+m[1], +m[2], +m[3]);
+      m = s.match(/^(\d{4})(\d{2})(\d{2})$/);
+      if (m) return pack(+m[1], +m[2], +m[3]);
+      m = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+      if (m) return pack(+m[3], +m[1], +m[2]);
+      if (/^\d{5}(\.\d+)?$/.test(s)) return toYmdNumber(Number(s));
+      return "";
+    }
+
+    function clubExportValue(v) {
+      if (v == null || v === "") return "";
+      if (typeof v === "number" && Number.isFinite(v)) return v;
+      const s = String(v).trim();
+      if (/^0\d+$/.test(s)) return s;
+      const n = Number(s.replace(/,/g, ""));
+      return s !== "" && Number.isFinite(n) ? n : s;
     }
 
     function downloadOrgExcel(orgKey) {
       if (!orgResult) return;
       const org = orgResult.orgs.find((o) => o.org === orgKey);
       if (!org) return;
-      const dateCols = new Set(
-        orgResult.header
-          .map((h, i) => (/date/i.test(blank(h)) ? i : -1))
-          .filter((i) => i >= 0)
-      );
-      const aoa = [orgResult.header, ...org.dataRows.map((r) => {
-        // pad to header width; write date columns as yyyy-mm-dd
-        const out = [];
-        for (let i = 0; i < orgResult.header.length; i++) {
-          const v = r[i] != null ? r[i] : "";
-          out.push(dateCols.has(i) ? toIsoDate(v) : v);
-        }
-        return out;
-      })];
+      const cols = orgResult.cols;
+      const headers = [
+        "Org",
+        "Upgrade Date",
+        "Club Number",
+        "AJE Out of Balance Total",
+        "Blank Payment Type Amount",
+        "Other Amount",
+      ];
+      const aoa = [headers, ...org.dataRows.map((r) => [
+        cols.org >= 0 ? blank(r[cols.org]) : "",
+        cols.upgrade >= 0 ? toYmdNumber(r[cols.upgrade]) : "",
+        cols.club >= 0 ? clubExportValue(r[cols.club]) : "",
+        cols.total >= 0 ? (num(r[cols.total]) ?? 0) : 0,
+        cols.blank >= 0 ? (num(r[cols.blank]) ?? 0) : 0,
+        cols.other >= 0 ? (num(r[cols.other]) ?? 0) : 0,
+      ])];
       const ws = XLSX.utils.aoa_to_sheet(aoa);
+      const moneyFmt = "$#,##0.00;[Red]-$#,##0.00;0.00";
+      for (let r = 1; r < aoa.length; r++) {
+        const dateCell = ws[XLSX.utils.encode_cell({ r, c: 1 })];
+        if (dateCell && typeof dateCell.v === "number") dateCell.z = "0";
+        for (const c of [3, 4, 5]) {
+          const cell = ws[XLSX.utils.encode_cell({ r, c })];
+          if (cell && typeof cell.v === "number") cell.z = moneyFmt;
+        }
+      }
+      ws["!cols"] = [
+        { wch: 12 },
+        { wch: 16 },
+        { wch: 14 },
+        { wch: 28 },
+        { wch: 30 },
+        { wch: 16 },
+      ];
       const wb = XLSX.utils.book_new();
-      const sheetName = orgKey.replace(/[\\/?*[\]]/g, "_").slice(0, 31) || "Org";
-      XLSX.utils.book_append_sheet(wb, ws, sheetName);
+      XLSX.utils.book_append_sheet(wb, ws, "total out of balance");
       XLSX.writeFile(wb, orgFileNameFor(orgKey, orgResult.reportMonth));
     }
 

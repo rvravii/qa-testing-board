@@ -1263,14 +1263,48 @@
       return `AJE Adjustment File ${m} - ${g}.xlsx`;
     }
 
+    function toIsoDate(value) {
+      if (value == null || value === "") return "";
+      if (value instanceof Date && !Number.isNaN(value.getTime())) {
+        const y = value.getFullYear();
+        const m = String(value.getMonth() + 1).padStart(2, "0");
+        const d = String(value.getDate()).padStart(2, "0");
+        return `${y}-${m}-${d}`;
+      }
+      const fromSerial = (n) => {
+        if (!Number.isFinite(n) || n < 20000 || n > 80000) return "";
+        const p = XLSX.SSF.parse_date_code(n);
+        if (!p || !p.y) return "";
+        return `${p.y}-${String(p.m).padStart(2, "0")}-${String(p.d).padStart(2, "0")}`;
+      };
+      if (typeof value === "number") return fromSerial(value) || String(value);
+      const s = String(value).trim();
+      if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+      const mdy = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+      if (mdy) return `${mdy[3]}-${mdy[1].padStart(2, "0")}-${mdy[2].padStart(2, "0")}`;
+      if (/^\d{5}(\.\d+)?$/.test(s)) {
+        const iso = fromSerial(Number(s));
+        if (iso) return iso;
+      }
+      return s;
+    }
+
     function downloadOrgExcel(orgKey) {
       if (!orgResult) return;
       const org = orgResult.orgs.find((o) => o.org === orgKey);
       if (!org) return;
+      const dateCols = new Set(
+        orgResult.header
+          .map((h, i) => (/date/i.test(blank(h)) ? i : -1))
+          .filter((i) => i >= 0)
+      );
       const aoa = [orgResult.header, ...org.dataRows.map((r) => {
-        // pad to header width
+        // pad to header width; write date columns as yyyy-mm-dd
         const out = [];
-        for (let i = 0; i < orgResult.header.length; i++) out.push(r[i] != null ? r[i] : "");
+        for (let i = 0; i < orgResult.header.length; i++) {
+          const v = r[i] != null ? r[i] : "";
+          out.push(dateCols.has(i) ? toIsoDate(v) : v);
+        }
         return out;
       })];
       const ws = XLSX.utils.aoa_to_sheet(aoa);

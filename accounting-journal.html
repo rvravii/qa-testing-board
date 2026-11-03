@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Accounting Journal Entries — ABC Insights QA</title>
   <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
   <style>
     :root {
       --bg: #0f172a;
@@ -407,7 +408,7 @@
           <code>AJE Adjustment File {Report Month} - {Org}.xlsx</code>
           (example: <code>AJE Adjustment File June 2026 - G0001.xlsx</code>).
           Sheet <code>total out of balance</code> columns:
-          Org, Upgrade Date (<code>YYYYMMDD</code>), Club Number, AJE Out of Balance Total,
+          Org, Upgrade Date (<code>yyyy-mm-dd</code>), Club Number, AJE Out of Balance Total,
           Blank Payment Type Amount, Other Amount.
         </div>
         <div class="kpis" id="orgKpiRow" style="margin-top:12px">
@@ -1307,10 +1308,24 @@
       return s !== "" && Number.isFinite(n) ? n : s;
     }
 
-    function downloadOrgExcel(orgKey) {
+    function ymdToDate(value) {
+      const n = toYmdNumber(value);
+      if (typeof n !== "number") return null;
+      const y = Math.trunc(n / 10000);
+      const m = Math.trunc((n % 10000) / 100);
+      const d = Math.trunc(n % 100);
+      if (!y || m < 1 || m > 12 || d < 1 || d > 31) return null;
+      return new Date(y, m - 1, d);
+    }
+
+    async function downloadOrgExcel(orgKey) {
       if (!orgResult) return;
       const org = orgResult.orgs.find((o) => o.org === orgKey);
       if (!org) return;
+      if (typeof ExcelJS === "undefined") {
+        alert("Excel export library failed to load. Refresh the page and try again.");
+        return;
+      }
       const cols = orgResult.cols;
       const headers = [
         "Org",
@@ -1320,35 +1335,47 @@
         "Blank Payment Type Amount",
         "Other Amount",
       ];
-      const aoa = [headers, ...org.dataRows.map((r) => [
-        cols.org >= 0 ? blank(r[cols.org]) : "",
-        cols.upgrade >= 0 ? toYmdNumber(r[cols.upgrade]) : "",
-        cols.club >= 0 ? clubExportValue(r[cols.club]) : "",
-        cols.total >= 0 ? (num(r[cols.total]) ?? 0) : 0,
-        cols.blank >= 0 ? (num(r[cols.blank]) ?? 0) : 0,
-        cols.other >= 0 ? (num(r[cols.other]) ?? 0) : 0,
-      ])];
-      const ws = XLSX.utils.aoa_to_sheet(aoa);
-      const moneyFmt = "$#,##0.00;[Red]-$#,##0.00;0.00";
-      for (let r = 1; r < aoa.length; r++) {
-        const dateCell = ws[XLSX.utils.encode_cell({ r, c: 1 })];
-        if (dateCell && typeof dateCell.v === "number") dateCell.z = "0";
-        for (const c of [3, 4, 5]) {
-          const cell = ws[XLSX.utils.encode_cell({ r, c })];
-          if (cell && typeof cell.v === "number") cell.z = moneyFmt;
-        }
-      }
-      ws["!cols"] = [
-        { wch: 12 },
-        { wch: 16 },
-        { wch: 14 },
-        { wch: 28 },
-        { wch: 30 },
-        { wch: 16 },
+      const wb = new ExcelJS.Workbook();
+      const ws = wb.addWorksheet("total out of balance");
+      ws.columns = [
+        { width: 12 },
+        { width: 16 },
+        { width: 14 },
+        { width: 28 },
+        { width: 30 },
+        { width: 16 },
       ];
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, "total out of balance");
-      XLSX.writeFile(wb, orgFileNameFor(orgKey, orgResult.reportMonth));
+      const headerRow = ws.addRow(headers);
+      headerRow.font = { name: "Calibri", bold: true, size: 13 };
+      headerRow.alignment = { vertical: "middle" };
+
+      const moneyFmt = "$#,##0.00;[Red]-$#,##0.00;0.00";
+      for (const r of org.dataRows) {
+        const upgrade = cols.upgrade >= 0 ? ymdToDate(r[cols.upgrade]) : null;
+        const row = ws.addRow([
+          cols.org >= 0 ? blank(r[cols.org]) : "",
+          upgrade || "",
+          cols.club >= 0 ? clubExportValue(r[cols.club]) : "",
+          cols.total >= 0 ? (num(r[cols.total]) ?? 0) : 0,
+          cols.blank >= 0 ? (num(r[cols.blank]) ?? 0) : 0,
+          cols.other >= 0 ? (num(r[cols.other]) ?? 0) : 0,
+        ]);
+        row.font = { name: "Calibri", size: 11 };
+        if (upgrade) row.getCell(2).numFmt = "yyyy-mm-dd";
+        for (const c of [4, 5, 6]) row.getCell(c).numFmt = moneyFmt;
+      }
+
+      const buf = await wb.xlsx.writeBuffer();
+      const blob = new Blob([buf], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = orgFileNameFor(orgKey, orgResult.reportMonth);
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(a.href);
     }
 
     async function downloadAllImbalancedOrgs() {
@@ -1358,7 +1385,7 @@
       downloadAllOrgBtn.disabled = true;
       orgFileMeta.textContent = `Downloading ${list.length} org file(s)…`;
       for (let i = 0; i < list.length; i++) {
-        downloadOrgExcel(list[i].org);
+        await downloadOrgExcel(list[i].org);
         orgFileMeta.textContent = `Downloaded ${i + 1} / ${list.length}: ${orgFileNameFor(list[i].org, orgResult.reportMonth)}`;
         await new Promise((r) => setTimeout(r, 350));
       }

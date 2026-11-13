@@ -77,6 +77,13 @@
     .pill.ok { background: #052e1a; color: #86efac; }
     .pill.bad { background: #450a0a; color: #fca5a5; }
     .pill.warn { background: #422006; color: #fcd34d; }
+    .pill.blank { background: #422006; color: #fde68a; border: 1px solid rgba(250, 204, 21, 0.7); }
+    .blank-callout {
+      margin-top: 14px; padding: 12px 14px; border-radius: 12px;
+      border: 1px solid rgba(250, 204, 21, 0.55);
+      background: rgba(250, 204, 21, 0.08);
+    }
+    .blank-callout h3 { margin: 0 0 8px; color: #fde68a; font-size: 0.95rem; }
     .filters {
       display: flex; flex-wrap: wrap; gap: 10px; align-items: end; margin: 12px 0;
     }
@@ -233,6 +240,7 @@
               <option value="analysis">Revenue Analysis</option>
               <option value="deposit">Deposit chain</option>
               <option value="structure">Structure / missing</option>
+              <option value="blank">Blank Payment Type</option>
             </select>
           </div>
           <div class="field">
@@ -261,26 +269,48 @@
 
       <div id="tabRollup" class="hidden">
         <h2 class="section-title">Clubs sum vs All Locations</h2>
-        <div class="note">Primary metric: Total Revenue by Payment Type → Including Tax (MTD).</div>
+        <div class="note">Including Tax day and MTD are read from each sheet’s header, so a shifted column layout is not counted as a rollup gap. A blank Payment Type with an amount is listed separately.</div>
         <div class="check-grid" id="rollupChecks" style="margin-top:10px"></div>
+        <div id="blankPayBox"></div>
       </div>
     </div>
   </div>
 
   <script>
     const TOL = 0.02;
-    const MTD_COLS = [
-      { c: 6, label: "ABC Member Billing MTD" },
-      { c: 8, label: "Collect at Club MTD" },
-      { c: 10, label: "Club Acct ABC MTD" },
-      { c: 12, label: "Club Acct Club MTD" },
-      { c: 14, label: "POS Club Collected MTD" },
-      { c: 16, label: "Third Party MTD" },
-      { c: 18, label: "Including Tax MTD" },
-      { c: 20, label: "Sales Tax MTD" },
-      { c: 22, label: "Excluding Tax MTD" },
+    const SECTION_TITLES = [
+      ["ABC Member Billing", "abc"],
+      ["Member Billing Collect at Club", "collect"],
+      ["Club Acct ABC Collected", "caAbc"],
+      ["Club Acct Club Collected", "caClub"],
+      ["POS Club Collected", "pos"],
+      ["Third Party", "third"],
+      ["Including Tax", "incl"],
+      ["Sales Tax", "tax"],
+      ["Excluding Tax", "excl"],
     ];
-    const PRIMARY = 18;
+    const METRIC_LABELS = [
+      ["abc", "ABC Member Billing"],
+      ["collect", "Collect at Club"],
+      ["caAbc", "Club Acct ABC"],
+      ["caClub", "Club Acct Club"],
+      ["pos", "POS Club Collected"],
+      ["third", "Third Party"],
+      ["incl", "Including Tax"],
+      ["tax", "Sales Tax"],
+      ["excl", "Excluding Tax"],
+    ];
+    const FALLBACK_COLS = {
+      abc: { day: 4, mtd: 6 },
+      collect: { day: 7, mtd: 8 },
+      caAbc: { day: 9, mtd: 11 },
+      caClub: { day: 12, mtd: 13 },
+      pos: { day: 14, mtd: 15 },
+      third: { day: 16, mtd: 17 },
+      incl: { day: 18, mtd: 19 },
+      tax: { day: 20, mtd: 21 },
+      excl: { day: 22, mtd: 23 },
+    };
 
     const fileInput = document.getElementById("fileInput");
     const runBtn = document.getElementById("runBtn");
@@ -373,6 +403,56 @@
       return m ? m[1].padStart(5, "0") : "";
     }
 
+    function cellText(row, c) {
+      const v = cell(row, c);
+      return v == null ? "" : String(v).replace(/\s+/g, " ").trim();
+    }
+
+    function resolveColumns(rows, labelRow) {
+      if (labelRow == null || labelRow < 1) return null;
+      const titleRow = rows[labelRow - 1];
+      const found = [];
+      if (titleRow) {
+        for (let c = 0; c < titleRow.length; c++) {
+          const s = cellText(titleRow, c);
+          if (!s) continue;
+          for (const [title, key] of SECTION_TITLES) {
+            if ((s === title || s.startsWith(title) || s.endsWith(title)) && !found.some((f) => f.key === key)) {
+              found.push({ key, day: c });
+            }
+          }
+        }
+      }
+      if (!found.length) return null;
+      found.sort((a, b) => a.day - b.day);
+      const map = {};
+      for (let i = 0; i < found.length; i++) {
+        const next = i + 1 < found.length ? found[i + 1].day : 30;
+        let mtd = null;
+        for (let c = found[i].day + 1; c < next; c++) {
+          if (cellText(rows[labelRow], c).toUpperCase() === "MTD") {
+            mtd = c;
+            break;
+          }
+        }
+        map[found[i].key] = { day: found[i].day, mtd };
+      }
+      return map.incl ? map : null;
+    }
+
+    function columnsOrFallback(rows, labelRow) {
+      return resolveColumns(rows, labelRow) || FALLBACK_COLS;
+    }
+
+    function amountCols(cols) {
+      const out = [];
+      for (const spec of Object.values(cols || {})) {
+        if (spec && spec.day != null) out.push(spec.day);
+        if (spec && spec.mtd != null) out.push(spec.mtd);
+      }
+      return out;
+    }
+
     function validateSheet(rows, sheetName, kind) {
       const checks = [];
       const meta = { sheetName, kind, mtdInclTax: null };
@@ -394,15 +474,22 @@
       // - No Interclub for period: report skips Total Collected; lines go straight to Total Revenue (not an issue)
       const emptyPay = findRow(rows, (s) => /no revenue by payment type/i.test(s));
       const payTotalRow = iTotColl >= 0 ? iTotColl : iTotPay;
+      const payCols = columnsOrFallback(rows, iPayHdr);
+      const inclMtdCol = payCols.incl && payCols.incl.mtd != null ? payCols.incl.mtd : 19;
+      const inclDayCol = payCols.incl && payCols.incl.day != null ? payCols.incl.day : 18;
+      const taxMtdCol = payCols.tax && payCols.tax.mtd != null ? payCols.tax.mtd : 21;
+      const exclMtdCol = payCols.excl && payCols.excl.mtd != null ? payCols.excl.mtd : 23;
 
       if (iPayHdr >= 0 && payTotalRow >= 0) {
         const targetLabel = iTotColl >= 0 ? "Total Collected" : "Total Revenue";
-        for (const { c, label } of MTD_COLS) {
-          const expected = sumCol(rows, iPayHdr + 1, payTotalRow, c);
-          const actual = num(cell(rows[payTotalRow], c)) ?? 0;
+        for (const [key, label] of METRIC_LABELS) {
+          const spec = payCols[key];
+          if (!spec || spec.mtd == null) continue;
+          const expected = sumCol(rows, iPayHdr + 1, payTotalRow, spec.mtd);
+          const actual = num(cell(rows[payTotalRow], spec.mtd)) ?? 0;
           checks.push(mkCheck({
             section: "payment",
-            name: `PayType lines → ${targetLabel} (${label})`,
+            name: `PayType lines → ${targetLabel} (${label} MTD)`,
             expected,
             actual,
             detail: iTotColl < 0
@@ -410,14 +497,36 @@
               : "",
           }));
         }
+        for (let i = iPayHdr + 1; i < payTotalRow; i++) {
+          if (label0(rows[i])) continue;
+          const cols = amountCols(payCols);
+          let any = false;
+          for (const c of cols) {
+            const n = num(cell(rows[i], c));
+            if (n != null && Math.abs(n) > 0.001) { any = true; break; }
+          }
+          if (!any) continue;
+          const inclAmt = num(cell(rows[i], inclMtdCol)) ?? 0;
+          checks.push(mkCheck({
+            section: "blank",
+            name: "Blank Payment Type",
+            expected: 0,
+            actual: inclAmt,
+            status: "fail",
+            detail: `Row ${i + 1} has an amount and no payment type. Including Tax MTD ${money(inclAmt)}.`,
+          }));
+        }
+      }
+
+      if (iTotPay >= 0) {
+        meta.mtdInclTax = num(cell(rows[iTotPay], inclMtdCol));
+        meta.dayInclTax = num(cell(rows[iTotPay], inclDayCol));
       }
 
       if (iTotColl >= 0 && iTotPay >= 0) {
-        const coll = num(cell(rows[iTotColl], PRIMARY)) ?? 0;
-        // Club sheets can have Due From + Due To Interclub rows between totals.
-        const interIncl = sumCol(rows, iTotColl + 1, iTotPay, PRIMARY);
-        const totPay = num(cell(rows[iTotPay], PRIMARY)) ?? 0;
-        meta.mtdInclTax = totPay;
+        const coll = num(cell(rows[iTotColl], inclMtdCol)) ?? 0;
+        const interIncl = sumCol(rows, iTotColl + 1, iTotPay, inclMtdCol);
+        const totPay = num(cell(rows[iTotPay], inclMtdCol)) ?? 0;
         const interRows = Math.max(0, iTotPay - iTotColl - 1);
         checks.push(mkCheck({
           section: "payment",
@@ -427,9 +536,9 @@
           detail: interRows ? `${interRows} Interclub row(s) between totals` : "No Interclub rows",
         }));
 
-        const incl = num(cell(rows[iTotColl], 18)) ?? 0;
-        const tax = num(cell(rows[iTotColl], 20)) ?? 0;
-        const excl = num(cell(rows[iTotColl], 22)) ?? 0;
+        const incl = num(cell(rows[iTotColl], inclMtdCol)) ?? 0;
+        const tax = num(cell(rows[iTotColl], taxMtdCol)) ?? 0;
+        const excl = num(cell(rows[iTotColl], exclMtdCol)) ?? 0;
         checks.push(mkCheck({
           section: "payment",
           name: "Tax identity: Incl ≈ Tax + Excl (Total Collected MTD)",
@@ -437,10 +546,9 @@
           actual: incl,
         }));
       } else if (iTotPay >= 0) {
-        meta.mtdInclTax = num(cell(rows[iTotPay], PRIMARY));
-        const incl = num(cell(rows[iTotPay], 18)) ?? 0;
-        const tax = num(cell(rows[iTotPay], 20)) ?? 0;
-        const excl = num(cell(rows[iTotPay], 22)) ?? 0;
+        const incl = num(cell(rows[iTotPay], inclMtdCol)) ?? 0;
+        const tax = num(cell(rows[iTotPay], taxMtdCol)) ?? 0;
+        const excl = num(cell(rows[iTotPay], exclMtdCol)) ?? 0;
         checks.push(mkCheck({
           section: "payment",
           name: "Tax identity: Incl ≈ Tax + Excl (Total Revenue MTD)",
@@ -452,11 +560,14 @@
       // emptyPay / missing totals with zero-period message → skip (not an issue)
 
       const emptyPc = findRow(rows, (s) => /no revenue by profit center/i.test(s));
+      const pcCols = columnsOrFallback(rows, iPcHdr);
       if (iPcHdr >= 0 && iTotPc >= 0) {
-        for (const c of [PRIMARY, 22]) {
-          const label = c === PRIMARY ? "Including Tax MTD" : "Excluding Tax MTD";
-          const expected = sumCol(rows, iPcHdr + 1, iTotPc, c);
-          const actual = num(cell(rows[iTotPc], c)) ?? 0;
+        for (const key of ["incl", "excl"]) {
+          const spec = pcCols[key];
+          if (!spec || spec.mtd == null) continue;
+          const label = key === "incl" ? "Including Tax MTD" : "Excluding Tax MTD";
+          const expected = sumCol(rows, iPcHdr + 1, iTotPc, spec.mtd);
+          const actual = num(cell(rows[iTotPc], spec.mtd)) ?? 0;
           checks.push(mkCheck({
             section: "profit",
             name: `Profit Center lines → Total (${label})`,
@@ -477,8 +588,9 @@
       }
 
       if (iTotPay >= 0 && iTotPc >= 0) {
-        const a = num(cell(rows[iTotPay], PRIMARY)) ?? 0;
-        const b = num(cell(rows[iTotPc], PRIMARY)) ?? 0;
+        const pcIncl = pcCols.incl && pcCols.incl.mtd != null ? pcCols.incl.mtd : inclMtdCol;
+        const a = num(cell(rows[iTotPay], inclMtdCol)) ?? 0;
+        const b = num(cell(rows[iTotPc], pcIncl)) ?? 0;
         checks.push(mkCheck({
           section: "cross",
           name: "PayType Total Revenue ↔ Profit Center Total (Incl Tax MTD)",
@@ -612,7 +724,7 @@
         ${checks.map((c) => `
           <div class="check-line">
             <div>
-              <span class="pill ${c.section === "structure" ? "warn" : "ok"}" style="margin-right:6px">${c.section}</span>
+              <span class="pill ${c.section === "blank" ? "blank" : c.section === "structure" ? "warn" : "ok"}" style="margin-right:6px">${c.section}</span>
               ${escapeHtml(c.name)}
               ${c.detail ? `<div class="note">${escapeHtml(c.detail)}</div>` : ""}
             </div>
@@ -700,30 +812,43 @@
           await new Promise((r) => setTimeout(r, 0));
         }
 
-        // Rollup
-        const allMtd = summaryResult.meta.mtdInclTax;
-        let clubSum = 0;
-        let withTotal = 0;
-        let missing = [];
-        for (const c of clubResults) {
-          if (c.meta.mtdInclTax != null) {
-            clubSum += c.meta.mtdInclTax;
-            withTotal += 1;
-          } else {
-            missing.push(c.sheetName);
+        function rollMetric(key, label) {
+          let clubSum = 0;
+          let withTotal = 0;
+          const missing = [];
+          for (const c of clubResults) {
+            if (c.meta[key] != null) {
+              clubSum += c.meta[key];
+              withTotal += 1;
+            } else {
+              missing.push(c.sheetName);
+            }
           }
+          const allVal = summaryResult.meta[key];
+          const check = mkCheck({
+            section: "cross",
+            name: `Sum of ${withTotal} club Total Revenue (${label}) ↔ All Locations`,
+            expected: allVal ?? 0,
+            actual: clubSum,
+            detail: missing.length ? `Missing total on: ${missing.join("; ")}` : "All club totals present",
+          });
+          if (missing.length) check.status = near(allVal, clubSum) ? "warn" : "fail";
+          return { check, missing, withTotal, clubSum, allVal };
         }
-        const rollupCheck = mkCheck({
-          section: "cross",
-          name: `Sum of ${withTotal} club Total Revenue (Incl Tax MTD) ↔ All Locations`,
-          expected: allMtd ?? 0,
-          actual: clubSum,
-          detail: missing.length ? `Missing total on: ${missing.join("; ")}` : "All club totals present",
-        });
-        if (missing.length) {
-          rollupCheck.status = near(allMtd, clubSum) ? "warn" : "fail";
-        }
-        rollupResult = { check: rollupCheck, missing, withTotal, clubSum, allMtd };
+        const mtdRoll = rollMetric("mtdInclTax", "Incl Tax MTD");
+        const dayRoll = rollMetric("dayInclTax", "Incl Tax day");
+        const blankHits = [];
+        const collectBlanks = (result) => {
+          if (!result) return;
+          for (const c of result.checks) {
+            if (c.section === "blank" && c.status !== "pass") {
+              blankHits.push({ sheet: result.sheetName, detail: c.detail, actual: c.actual });
+            }
+          }
+        };
+        collectBlanks(summaryResult);
+        clubResults.forEach(collectBlanks);
+        rollupResult = { check: mtdRoll.check, dayCheck: dayRoll.check, blankHits, missing: mtdRoll.missing, withTotal: mtdRoll.withTotal, clubSum: mtdRoll.clubSum, allMtd: mtdRoll.allVal };
 
         setProgress(100);
         renderAll();
@@ -737,6 +862,23 @@
         setTimeout(() => progressWrap.classList.add("hidden"), 600);
       }
     });
+
+    function renderBlankPayments() {
+      const host = document.getElementById("blankPayBox");
+      if (!host) return;
+      const hits = rollupResult?.blankHits || [];
+      if (!hits.length) {
+        host.innerHTML = "";
+        return;
+      }
+      host.innerHTML = `
+        <div class="blank-callout">
+          <h3>Blank Payment Type · ${hits.length}</h3>
+          <div class="note">A payment-type row has an amount and a blank name. This is separate from the rollup.</div>
+          ${hits.map((h) => `<div class="note" style="margin-top:6px"><strong>${escapeHtml(h.sheet)}</strong> — ${escapeHtml(h.detail || "")}</div>`).join("")}
+        </div>
+      `;
+    }
 
     function countClubs(status) {
       if (status === "all") return clubResults.length;
@@ -756,12 +898,17 @@
       document.getElementById("kpiWarnVal").textContent = String(warnN);
 
       const rc = rollupResult?.check;
+      const dayRc = rollupResult?.dayCheck;
       const rollEl = document.getElementById("kpiRollupVal");
       if (rc) {
-        rollEl.textContent = rc.status === "pass" ? "PASS" : rc.status.toUpperCase();
-        rollEl.className = `v ${rc.status === "pass" ? "ok" : rc.status === "warn" ? "warn" : "bad"}`;
+        const rollFail = rc.status === "fail" || dayRc?.status === "fail";
+        const rollWarn = !rollFail && (rc.status === "warn" || dayRc?.status === "warn");
+        const rollStatus = rollFail ? "fail" : rollWarn ? "warn" : "pass";
+        rollEl.textContent = rollStatus === "pass" ? "PASS" : rollStatus.toUpperCase();
+        rollEl.className = `v ${rollStatus === "pass" ? "ok" : rollStatus === "warn" ? "warn" : "bad"}`;
+        const blankN = rollupResult.blankHits?.length || 0;
         document.getElementById("kpiRollupHint").textContent =
-          `Diff ${money(rc.diff)} · clubs ${rollupResult.withTotal}`;
+          `MTD diff ${money(rc.diff)} · day diff ${money(dayRc ? dayRc.diff : 0)}${blankN ? ` · blank pay ${blankN}` : ""}`;
       }
 
       const sFails = summaryResult.checks.filter((c) => c.status === "fail");
@@ -772,7 +919,11 @@
          MTD Incl Tax ${money(summaryResult.meta.mtdInclTax)}`;
       renderCheckLines(summaryResult.checks, document.getElementById("summaryChecks"));
 
-      renderCheckLines(rollupResult ? [rollupResult.check] : [], document.getElementById("rollupChecks"));
+      renderCheckLines(
+        rollupResult ? [rollupResult.check, rollupResult.dayCheck].filter(Boolean) : [],
+        document.getElementById("rollupChecks")
+      );
+      renderBlankPayments();
       renderClubs();
     }
 
@@ -970,7 +1121,8 @@
 
         <h4>What the board does</h4>
         <ol>
-          <li><strong>Summary check</strong> — for every <code>(Club, Section)</code>, verifies <code>SUM(section rows) == section total</code> (tolerance $0.01).</li>
+          <li><strong>Summary check</strong> — for every <code>(Club, Section)</code>, verifies <code>SUM(section rows) == section total</code> (tolerance $0.02). Day and MTD columns come from that sheet’s header, so a shifted layout does not create a false rollup gap.</li>
+          <li><strong>Blank Payment Type</strong> — a row under Revenue by Payment Type with an amount and no payment-type name is failed on its own and listed in yellow on the Rollup tab.</li>
           <li><strong>Field vs Total check</strong> — for every row that carries a "total" field, verifies the total equals the arithmetic sum of contributing amounts.</li>
           <li>Filters by club or section; exports XLSX evidence with the exact contributing rows for each mismatch.</li>
         </ol>

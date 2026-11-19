@@ -127,6 +127,7 @@
       <div class="note">
         Upload the <strong>MTD Production</strong> workbook. The page checks the <strong>Summary</strong> sheet
         against the Summary Legend (member totals, membership mix, paymode, gender, annual fees, invoices, and joins),
+        then compares each club tab’s <strong>Gross Invoices</strong> to that club’s Summary row,
         then checks every club tab for a missing day in <strong>IN CLUB JOINS</strong>, <strong>VOLUNTARY CANCELS</strong>,
         and <strong>Transfers In</strong> (one row per club). Gaps on <strong>PFAQ association clubs</strong> (embedded list) are tagged
         <strong>Expected</strong>. Paymode has no total row — the check adds ACH, Reversal, Problem, Credit Card, and Non Billing.
@@ -149,7 +150,7 @@
         </div>
         <div class="legend-box">
           <h3>Summary dollars and joins</h3>
-          <div class="note">Status dollars equal the Grand Total. Annual-fee months equal the annual total. Club gross invoices equal the Summary invoice total. Join types equal each channel total.</div>
+          <div class="note">Status dollars equal the Grand Total. Annual-fee months equal the annual total. Each club tab’s Gross Invoices equals that club’s Summary row. Join types equal each channel total.</div>
         </div>
         <div class="legend-box">
           <h3>Client logic on the same sheet</h3>
@@ -304,6 +305,7 @@
           <li>The twelve annual-fee months equal the annual Grand Total.</li>
           <li>Daily Summary carries the same member Grand Total as Summary.</li>
           <li>Club gross-invoice dollars equal the Summary Gross Invoices total.</li>
+          <li>Each club tab’s Gross Invoices dollar amount equals that club’s Gross Invoices on the Summary grid. A sheet amount with $0.00 on the Summary row is a fail.</li>
           <li>In Club, Web, and Mobile type columns equal that channel’s Total, and the three channels equal the combined Total.</li>
           <li>Classic Plus (CLASPL) is its own bucket. No duplicate club. A club with invoices still has joins. ACH% + CC% equals 100% when the club has members or invoices.</li>
         </ul>
@@ -395,9 +397,14 @@
       const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "", raw: true });
       const sections = {};
       let current = null;
+      let gross = null;
       for (let i = 0; i < rows.length; i++) {
         const c0 = rows[i][0];
         const c1 = rows[i][1];
+        if (gross === null && i < 30 && String(c0 || "").trim().toLowerCase() === "gross invoices") {
+          const dollars = num(rows[i][3]);
+          gross = dollars !== null ? dollars : (num(rows[i][2]) ?? 0);
+        }
         const next0 = rows[i + 1] ? rows[i + 1][0] : null;
         if (typeof c1 === "string" && c1.trim() && typeof next0 === "string" && String(next0).trim().toLowerCase() === "date") {
           current = c1.trim();
@@ -408,7 +415,7 @@
         if (d && current) sections[current].add(iso(d));
         if (typeof c0 === "string" && c0.trim().toLowerCase() === "grand total") current = null;
       }
-      return sections;
+      return { sections, gross };
     }
 
     function num(v) {
@@ -755,6 +762,7 @@
 
       const titleAt = rows.findIndex((row) => (row || []).some((c) => headerNorm(c) === "in club joins"));
       let summaryClubs = 0;
+      const summaryGross = new Map();
       if (titleAt >= 0 && rows[titleAt + 1]) {
         const titleRow = rows[titleAt];
         const headerRow = rows[titleAt + 1];
@@ -818,6 +826,7 @@
 
           const gross = grossCol >= 0 ? num(row[grossCol]) || 0 : 0;
           grossSum += gross;
+          summaryGross.set(normalizeClubCode(id) || id, { name, gross });
           if (gross < -0.009) {
             negGross += 1;
             clubIssues.push({ club: name, clubId: id, check: "Negative gross invoice", detail: gross.toLocaleString("en-US", { style: "currency", currency: "USD" }) });
@@ -938,7 +947,45 @@
         });
       }
 
-      return { checks, clubIssues, summaryClubs };
+      return { checks, clubIssues, summaryClubs, summaryGross };
+    }
+
+    function moneyGap(n) {
+      return (n || 0).toLocaleString("en-US", { style: "currency", currency: "USD" });
+    }
+
+    function findGrossMismatches(summaryGross, sheetGross) {
+      const mismatches = [];
+      const seen = new Set();
+      for (const row of sheetGross) {
+        const id = normalizeClubCode(row.sheet) || row.sheet;
+        seen.add(id);
+        const summary = summaryGross.get(id);
+        const sheetAmt = row.gross;
+        const summaryAmt = summary ? summary.gross : null;
+        const name = summary ? summary.name : row.sheet;
+        if (summaryAmt === null) {
+          if (sheetAmt != null && Math.abs(sheetAmt) > 0.05) {
+            mismatches.push({ id, name, sheetAmt, summaryAmt: null });
+          }
+          continue;
+        }
+        if (sheetAmt === null) {
+          if (Math.abs(summaryAmt) > 0.05) mismatches.push({ id, name, sheetAmt: null, summaryAmt });
+          continue;
+        }
+        if (Math.abs(sheetAmt - summaryAmt) > 0.05) {
+          mismatches.push({ id, name, sheetAmt, summaryAmt });
+        }
+      }
+      for (const [id, summary] of summaryGross) {
+        if (seen.has(id)) continue;
+        if (Math.abs(summary.gross) > 0.05) {
+          mismatches.push({ id, name: summary.name, sheetAmt: null, summaryAmt: summary.gross });
+        }
+      }
+      mismatches.sort((a, b) => Math.abs((b.sheetAmt || 0) - (b.summaryAmt || 0)) - Math.abs((a.sheetAmt || 0) - (a.summaryAmt || 0)));
+      return mismatches;
     }
 
     function analyzeWorkbook(wb) {
@@ -958,20 +1005,47 @@
       const clubSheets = wb.SheetNames.filter((n) => !SKIP.has(n));
       const allDates = new Set();
       const clubSections = [];
+      const sheetGross = [];
 
       for (let i = 0; i < clubSheets.length; i++) {
         const name = clubSheets[i];
         setProgress(10 + (70 * (i + 1)) / clubSheets.length);
-        const sections = parseClubSheet(wb.Sheets[name], name);
+        const parsed = parseClubSheet(wb.Sheets[name], name);
+        const sections = parsed.sections;
+        sheetGross.push({ sheet: name, gross: parsed.gross });
         for (const dates of Object.values(sections)) {
           for (const d of dates) allDates.add(d);
         }
         clubSections.push({ sheet: name, sections });
       }
 
+      const grossMismatches = findGrossMismatches(logic.summaryGross || new Map(), sheetGross);
+      const grossGap = grossMismatches.reduce((s, m) => s + ((m.sheetAmt || 0) - (m.summaryAmt || 0)), 0);
+      pushText(logic.checks, {
+        name: "Club sheet gross vs Summary row",
+        rule: "Each club tab’s Gross Invoices dollar amount equals that club’s Gross Invoices on the Summary grid.",
+        source: "IGS-19461 · IGS-19619 · DNADW-3453",
+        expected: "0 clubs off",
+        actual: `${grossMismatches.length.toLocaleString("en-US")} clubs off`,
+        note: grossMismatches.length
+          ? `${grossMismatches.slice(0, 8).map((m) => `${m.name}: sheet ${m.sheetAmt == null ? "missing" : moneyGap(m.sheetAmt)} vs Summary ${m.summaryAmt == null ? "missing" : moneyGap(m.summaryAmt)}`).join("; ")} · net gap ${moneyGap(grossGap)}`
+          : "Every club tab matches its Summary row.",
+        pass: grossMismatches.length === 0,
+      });
+      const grossIssues = grossMismatches.map((m) => ({
+        club: m.name,
+        clubId: m.id,
+        check: "Club sheet vs Summary gross",
+        detail: `Club sheet ${m.sheetAmt == null ? "missing" : moneyGap(m.sheetAmt)} vs Summary row ${m.summaryAmt == null ? "missing" : moneyGap(m.summaryAmt)}`,
+        forceUnexpected: true,
+      }));
+
       if (!allDates.size) {
-        const clubIssues = (logic.clubIssues || []).map((row) => {
+        const clubIssues = (logic.clubIssues || []).concat(grossIssues).map((row) => {
           const id = row.clubId || normalizeClubCode(row.club);
+          if (row.forceUnexpected) {
+            return { ...row, clubId: id, pfaqExpected: false, flagKey: "unexpected", flagLabel: "Unexpected" };
+          }
           const flag = pfaqFlag(id);
           return { ...row, clubId: id, pfaqExpected: flag.key === "expected", flagKey: flag.key, flagLabel: flag.label };
         });
@@ -1050,8 +1124,11 @@
       const dateExpected = findings.filter((f) => f.pfaqExpected).length;
       const dateUnexpected = findings.filter((f) => !f.pfaqExpected).length;
 
-      const clubIssues = (logic.clubIssues || []).map((row) => {
+      const clubIssues = (logic.clubIssues || []).concat(grossIssues).map((row) => {
         const id = row.clubId || normalizeClubCode(row.club);
+        if (row.forceUnexpected) {
+          return { ...row, clubId: id, pfaqExpected: false, flagKey: "unexpected", flagLabel: "Unexpected" };
+        }
         const flag = pfaqFlag(id);
         return { ...row, clubId: id, pfaqExpected: flag.key === "expected", flagKey: flag.key, flagLabel: flag.label };
       });

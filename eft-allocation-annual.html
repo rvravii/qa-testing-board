@@ -106,12 +106,9 @@
     }
     .section-head .section-title { margin: 0; }
     .date-session {
-      flex-shrink: 0; background: #14532d; color: #bbf7d0;
-      border: 1px solid #4ade80; border-radius: 8px;
+      flex-shrink: 0; background: #fff; color: #111;
+      border: 1px solid #d1d5db; border-radius: 6px;
       padding: 6px 12px; font-weight: 700; font-size: 0.92rem; white-space: nowrap;
-    }
-    .date-session.missing {
-      background: #422006; color: #fcd34d; border-color: #f59e0b;
     }
     .toolbar { display: flex; gap: 8px; flex-wrap: wrap; margin: 10px 0; }
     .collapse-head {
@@ -784,13 +781,8 @@
     function showReportDate(asOf) {
       const el = $("reportDate");
       const label = formatSessionDate(asOf);
-      el.classList.remove("hidden", "missing");
-      if (label) {
-        el.textContent = `Date - ${label}`;
-      } else {
-        el.textContent = "Date not found";
-        el.classList.add("missing");
-      }
+      el.classList.remove("hidden");
+      el.textContent = label ? `Date - ${label}` : "Date not found";
     }
 
     function formatBugDate(asOf) {
@@ -2079,7 +2071,7 @@
 
         if (lastBugContext) lastBugContext.clubs = clubMismatchRows.slice();
         refreshActionButtons();
-        $("meta").textContent = `${fileName} · Tax clubs: ${tax.clubs.length} · checks done`;
+        $("meta").textContent = `${fileName} · as of ${formatSessionDate(asOf) || "date not found"} · Tax clubs: ${tax.clubs.length} · checks done`;
       } catch (err) {
         alert(err.message || String(err));
       } finally {

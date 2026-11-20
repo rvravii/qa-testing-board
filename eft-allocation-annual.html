@@ -100,6 +100,19 @@
     .pill.info { background: #0c1a33; color: #93c5fd; }
     .pill.expected { background: rgba(125, 211, 252, 0.16); color: #7dd3fc; border: 1px solid rgba(125, 211, 252, 0.4); }
     .section-title { margin: 0 0 8px; font-size: 1.05rem; }
+    .section-head {
+      display: flex; align-items: center; justify-content: space-between; gap: 12px;
+      margin-bottom: 8px;
+    }
+    .section-head .section-title { margin: 0; }
+    .date-session {
+      flex-shrink: 0; background: #14532d; color: #bbf7d0;
+      border: 1px solid #4ade80; border-radius: 8px;
+      padding: 6px 12px; font-weight: 700; font-size: 0.92rem; white-space: nowrap;
+    }
+    .date-session.missing {
+      background: #422006; color: #fcd34d; border-color: #f59e0b;
+    }
     .toolbar { display: flex; gap: 8px; flex-wrap: wrap; margin: 10px 0; }
     .collapse-head {
       display: flex; align-items: center; justify-content: space-between; gap: 12px;
@@ -291,7 +304,10 @@
       </div>
 
       <div class="card">
-        <h2 class="section-title">Summary validations</h2>
+        <div class="section-head">
+          <h2 class="section-title">Summary validations</h2>
+          <div class="date-session hidden" id="reportDate">Date</div>
+        </div>
         <div class="checks" id="checks"></div>
       </div>
 
@@ -731,16 +747,50 @@
     }
 
     function extractAsOf(eftRows, taxRows, combRows) {
-      for (const rows of [combRows, eftRows, taxRows]) {
-        for (const r of (rows || []).slice(0, 10)) {
-          const s = String(r?.[0] ?? "").trim();
-          if (!s) continue;
-          const m = s.match(/as of\s+([\d\/\-]+)/i);
-          if (m) return m[1];
-          if (/^as of\s+/i.test(s)) return s.replace(/^as of\s+/i, "").trim();
+      for (const rows of [eftRows, combRows, taxRows]) {
+        for (const r of (rows || []).slice(0, 15)) {
+          for (const cell of r || []) {
+            const s = String(cell ?? "").trim();
+            if (!s) continue;
+            const m = s.match(/as of\s+(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4})/i);
+            if (m) return m[1];
+          }
         }
       }
       return "";
+    }
+
+    function formatSessionDate(asOf) {
+      if (!asOf) return "";
+      const m = String(asOf).match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/);
+      if (!m) return asOf;
+      let mo = Number(m[1]);
+      let day = Number(m[2]);
+      let year = Number(m[3]);
+      if (year < 100) year += 2000;
+      if (mo > 12 && day <= 12) {
+        const t = mo;
+        mo = day;
+        day = t;
+      }
+      const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+      const name = months[mo - 1];
+      if (!name || day < 1 || day > 31) return asOf;
+      const teen = day % 100;
+      const suffix = teen >= 11 && teen <= 13 ? "th" : { 1: "st", 2: "nd", 3: "rd" }[day % 10] || "th";
+      return `${day}${suffix} ${name} ${year}`;
+    }
+
+    function showReportDate(asOf) {
+      const el = $("reportDate");
+      const label = formatSessionDate(asOf);
+      el.classList.remove("hidden", "missing");
+      if (label) {
+        el.textContent = `Date - ${label}`;
+      } else {
+        el.textContent = "Date not found";
+        el.classList.add("missing");
+      }
     }
 
     function formatBugDate(asOf) {
@@ -1877,6 +1927,7 @@
         const tax = parseTaxSummary(taxRowsSummary);
         const comb = parseCombinedSummary(combRowsSummary);
         const asOf = extractAsOf(eftRowsSummary, taxRowsSummary, combRowsSummary);
+        showReportDate(asOf);
 
         taxClubsByCode = new Map();
         for (const c of tax.clubs) {
@@ -1978,7 +2029,7 @@
         };
         refreshActionButtons();
         updateRoyaltyRunEnabled();
-        $("meta").textContent = `${fileName} · Tax clubs: ${tax.clubs.length} · summary done · scanning clubs…`;
+        $("meta").textContent = `${fileName} · as of ${formatSessionDate(asOf) || "date not found"} · Tax clubs: ${tax.clubs.length} · summary done · scanning clubs…`;
         // Don't keep Run disabled during long club scan
         $("runBtn").disabled = false;
 
@@ -2523,7 +2574,7 @@
 
         <h4>What the board does now</h4>
         <ul>
-          <li><strong>Step 1</strong> — Upload EFT Allocation Annual (EFT / Tax / Combined Summary reconciliation across all clubs).</li>
+          <li><strong>Step 1</strong> — Upload EFT Allocation Annual (EFT / Tax / Combined Summary reconciliation across all clubs). The file’s <strong>AS OF</strong> date is shown next to Summary validations.</li>
           <li><strong>Step 2</strong> — Upload Royalty Report + PF PFAQ Club Association List for Gross Invoice validation.</li>
           <li>Buckets results into <strong>Expected (PFAQ)</strong>, <strong>Unexpected difference</strong>, <strong>Only in Royalty</strong>, <strong>Only in EFT</strong>.</li>
           <li><strong>Create Bug</strong> activates when summary / club differences are found — pre-fills a Jira ticket with the findings.</li>
